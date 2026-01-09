@@ -1,0 +1,5 @@
+{
+  "name": "ClinicFlow",
+  "description": "A comprehensive clinic management application to track appointments, clients, and retention analytics with financial reporting.",
+  "requestFramePermissions": []
+}
