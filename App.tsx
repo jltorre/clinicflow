@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-// FIX: Using firebase/app for types and auth methods to align with v8 SDK.
-// FIX: Using compat imports to get correct types and namespaces.
+
+import React, { useState, useEffect, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import { auth } from './firebase';
@@ -16,13 +15,24 @@ import { ClientDetailPage } from './components/ClientDetailPage';
 import { ServiceDetailPage } from './components/ServiceDetailPage'; 
 import { StaffDetailPage } from './components/StaffDetailPage';
 import { dataService } from './services/dataService';
-import { Client, ServiceType, Appointment, AppStatus, Staff, UserProfile } from './types';
-import { X, Check, Copy, ArrowRight, Trash, LogOut, Mail, Phone, Calendar as CalendarIcon, Move, Edit2, EyeOff, Eye, Lightbulb, Plus, AlertTriangle } from 'lucide-react';
-// Adds missing parseISO to the date-fns import
-// FIX: Removed parseISO as it's not exported in the user's environment. new Date() is used instead.
+import { Client, ServiceType, Appointment, AppStatus, Staff, UserProfile, AppSettings } from './types';
+import { X, Check, Copy, ArrowRight, Trash, LogOut, Mail, Phone, Calendar as CalendarIcon, Move, Edit2, EyeOff, Eye, Lightbulb, Plus, AlertTriangle, Wallet, CheckCircle, Info, AlertCircle } from 'lucide-react';
 import { format, addDays, isFuture, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+// FIX: Define missing type used in props and state
+interface PendingAppointmentContext {
+  clientId: string;
+  serviceTypeId: string;
+  recommendedDate: Date;
+}
+
+// Toast Notification System
+interface Toast {
+    id: string;
+    message: string;
+    type: 'success' | 'error' | 'info';
+}
 
 const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode }> = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
@@ -111,42 +121,38 @@ const ConfirmationModal: React.FC<{
   );
 };
 
-// Helper to format currency
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
-};
-
-// Helper to check billable status (defined here to be accessible by helpers)
-const isBillable = (statusId: string, allStatuses: AppStatus[]) => allStatuses.find(s => s.id === statusId)?.isBillable || false;
-
-// New type for pending appointment context
-type PendingAppointmentContext = {
-    clientId: string;
-    serviceTypeId: string;
-    recommendedDate: Date;
-};
-
 const App: React.FC = () => {
-  // FIX: Corrected Firebase User type to firebase.User
   const [user, setUser] = useState<firebase.User | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null); // New state for user profile
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isGuest, setIsGuest] = useState(false);
   const [activeTab, setActiveTab] = useState('calendar');
-  const [previousTab, setPreviousTab] = useState('clients'); // For dynamic back navigation
+  const [previousTab, setPreviousTab] = useState('clients');
   
-  // Data State
   const [clients, setClients] = useState<Client[]>([]);
   const [services, setServices] = useState<ServiceType[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [statuses, setStatuses] = useState<AppStatus[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
+  const [settings, setSettings] = useState<AppSettings>({ currency: 'EUR', defaultBookingFee: 20 });
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
 
-  // Tour State
   const [showTour, setShowTour] = useState(false);
 
-  // Dark Mode
+  const addToast = useCallback((message: string, type: Toast['type'] = 'success') => {
+      const id = Math.random().toString(36).substr(2, 9);
+      setToasts(prev => [...prev, { id, message, type }]);
+      setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+      }, 3000);
+  }, []);
+
+  // FIX: Added missing helper function
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
+  };
+
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('clinicflow-theme');
@@ -157,23 +163,21 @@ const App: React.FC = () => {
   });
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (currentUser) => { // Made async
+    const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
       if (currentUser) {
           setUser(currentUser);
           setIsGuest(false);
-          // Call the new service to ensure user profile exists in Firestore
           const profile = await dataService.getUserProfile(currentUser);
           setUserProfile(profile);
       } else {
           setUser(null);
-          setUserProfile(null); // Reset user profile on logout
+          setUserProfile(null);
       }
       setAuthLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
-  // Check Tour
   useEffect(() => {
       const tourCompleted = localStorage.getItem('clinicflow-tour-completed');
       if ((user || isGuest) && !tourCompleted) {
@@ -210,6 +214,9 @@ const App: React.FC = () => {
             setAppointments(a);
             setStatuses(st);
             setStaff(sf);
+            
+            const savedSettings = localStorage.getItem(`settings-${uid}`);
+            if (savedSettings) setSettings(JSON.parse(savedSettings));
         } catch (error) {
             console.error("Error loading data:", error);
         } finally {
@@ -217,12 +224,6 @@ const App: React.FC = () => {
         }
       };
       loadData();
-    } else {
-        setClients([]);
-        setServices([]);
-        setAppointments([]);
-        setStatuses([]);
-        setStaff([]);
     }
   }, [user, isGuest]);
 
@@ -239,7 +240,6 @@ const App: React.FC = () => {
 
   const toggleDarkMode = () => setDarkMode(!darkMode);
 
-  // Modals & State
   const [isAptModalOpen, setAptModalOpen] = useState(false);
   const [editingApt, setEditingApt] = useState<Appointment | null>(null);
   const [isClientModalOpen, setClientModalOpen] = useState(false);
@@ -259,15 +259,12 @@ const App: React.FC = () => {
     onConfirm: () => {},
   });
   
-  // Forms
   const [aptForm, setAptForm] = useState<Partial<Appointment> & { endTime?: string }>({});
   const [clientForm, setClientForm] = useState<Partial<Client>>({});
   const [serviceForm, setServiceForm] = useState<Partial<ServiceType>>({});
   const [staffForm, setStaffForm] = useState<Partial<Staff>>({});
   
-  // New state for contextual appointment creation
   const [pendingAppointmentContext, setPendingAppointmentContext] = useState<PendingAppointmentContext | null>(null);
-
 
   const getUid = () => isGuest ? 'guest' : user?.uid;
   const handleLogout = () => { 
@@ -275,9 +272,8 @@ const App: React.FC = () => {
       auth.signOut().catch(error => console.error("Error logging out:", error)); 
   };
   
-  // Dynamic navigation logic
   const handleViewClient = (id: string) => {
-      setPreviousTab(activeTab); // Store where we came from
+      setPreviousTab(activeTab);
       setSelectedClientIdForDetailView(id);
       setActiveTab('client-detail');
   };
@@ -285,7 +281,7 @@ const App: React.FC = () => {
       setSelectedClientIdForDetailView(null);
       setSelectedServiceIdForDetailView(null);
       setSelectedStaffIdForDetailView(null);
-      setActiveTab(previousTab); // Go back to the stored tab
+      setActiveTab(previousTab);
   };
   
   const handleViewService = (id: string) => {
@@ -300,20 +296,15 @@ const App: React.FC = () => {
       setActiveTab('staff-detail');
   };
   
-  // New handler for scheduling from detail pages
   const handleScheduleFromDetail = (context: PendingAppointmentContext) => {
     setPendingAppointmentContext(context);
     setActiveTab('calendar');
   };
 
-
-  // --- Appointment Logic ---
-  // Helper to calculate final price
   const calculateFinalPrice = (basePrice: number, discountPercentage: number) => {
     return basePrice * (1 - (discountPercentage / 100));
   };
 
-  // Updated handleOpenAptModal to accept initialFormValues
   const handleOpenAptModal = (apt?: Appointment, date?: Date, time?: string, options?: { clientId?: string; serviceTypeId?: string }) => {
     const defaultStatus = statuses.find(s => s.isDefault) || statuses[0];
     if (apt) {
@@ -327,8 +318,10 @@ const App: React.FC = () => {
           endTime: `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`,
           basePrice: apt.basePrice, 
           discountPercentage: apt.discountPercentage,
-          price: apt.price, // This is the final calculated price
-          notes: apt.notes || '' // Initialize notes for editing
+          price: apt.price,
+          bookingFeePaid: apt.bookingFeePaid || false,
+          bookingFeeAmount: apt.bookingFeeAmount ?? settings.defaultBookingFee,
+          notes: apt.notes || ''
       });
     } else {
       setEditingApt(null);
@@ -338,8 +331,6 @@ const App: React.FC = () => {
       const endH = Math.floor(totalMinutes / 60);
       const endM = totalMinutes % 60;
 
-      // Initial values for new appointment, will be updated by dropdowns
-      // Prioritize values from options, then first available service/client
       const defaultService = options?.serviceTypeId ? services.find(s => s.id === options.serviceTypeId) : (services.length > 0 ? services[0] : null);
       const defaultClient = options?.clientId ? clients.find(c => c.id === options.clientId) : (clients.length > 0 ? clients[0] : null);
 
@@ -357,16 +348,17 @@ const App: React.FC = () => {
         basePrice: defaultBasePrice,
         discountPercentage: defaultClientDiscount,
         price: defaultFinalPrice,
-        notes: '', // Initialize notes for new appointment
+        bookingFeePaid: false,
+        bookingFeeAmount: settings.defaultBookingFee, // Using the global setting value here
+        notes: '',
         endTime: `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`,
       });
     }
     setAptModalOpen(true);
   };
 
-  // Recalculate appointment prices when client or service changes in the form
   useEffect(() => {
-    if (isAptModalOpen && aptForm.clientId && aptForm.serviceTypeId) {
+    if (isAptModalOpen && !editingApt && aptForm.clientId && aptForm.serviceTypeId) {
       const selectedService = services.find(s => s.id === aptForm.serviceTypeId);
       const selectedClient = clients.find(c => c.id === aptForm.clientId);
 
@@ -379,17 +371,17 @@ const App: React.FC = () => {
         basePrice: newBasePrice,
         discountPercentage: newDiscountPercentage,
         price: newFinalPrice,
-        durationMinutes: selectedService?.defaultDuration || 60 // Also update duration if service changes
+        durationMinutes: selectedService?.defaultDuration || 60
       }));
     }
-  }, [aptForm.clientId, aptForm.serviceTypeId, isAptModalOpen, services, clients]);
+  }, [aptForm.clientId, aptForm.serviceTypeId, isAptModalOpen, services, clients, editingApt]);
 
 
   const handleSaveApt = async (e: React.FormEvent) => {
     e.preventDefault();
     const uid = getUid();
     if (!uid || !aptForm.clientId || !aptForm.serviceTypeId || !aptForm.date || !aptForm.statusId) {
-        alert("Por favor, rellena todos los campos obligatorios (Cliente, Tratamiento, Fecha, Estado).");
+        addToast("Por favor, rellena todos los campos obligatorios.", "error");
         return;
     }
 
@@ -402,14 +394,17 @@ const App: React.FC = () => {
       date: aptForm.date,
       startTime: aptForm.startTime || '09:00',
       durationMinutes: Number(aptForm.durationMinutes) || 60,
-      basePrice: Number(aptForm.basePrice) || 0, // Save basePrice
-      discountPercentage: Number(aptForm.discountPercentage) || 0, // Save discount
-      price: Number(aptForm.price) || 0, // Save final calculated price
-      notes: aptForm.notes || '' // Save notes
+      basePrice: Number(aptForm.basePrice) || 0,
+      discountPercentage: Number(aptForm.discountPercentage) || 0,
+      price: Number(aptForm.price) || 0,
+      bookingFeePaid: aptForm.bookingFeePaid || false,
+      bookingFeeAmount: Number(aptForm.bookingFeeAmount) || 0,
+      notes: aptForm.notes || ''
     }, uid);
     if (editingApt) setAppointments(appointments.map(a => a.id === saved.id ? saved : a));
     else setAppointments([...appointments, saved]);
     setAptModalOpen(false);
+    addToast("Cita guardada correctamente");
   };
 
   const handleUpdateAppointment = async (apt: Appointment) => {
@@ -417,56 +412,59 @@ const App: React.FC = () => {
       if (!uid) return;
       setAppointments(appointments.map(a => a.id === apt.id ? apt : a));
       await dataService.saveAppointment(apt, uid);
+      addToast("Cita actualizada");
   };
 
-  // UPDATED: Quick Complete Handler (Prioritizes Default Status)
   const handleQuickComplete = async (apt: Appointment) => {
       const uid = getUid();
       if (!uid) return;
-      
-      // Look for a status marked as 'isDefault', otherwise just the first billable one
       const targetStatus = statuses.find(s => s.isDefault && s.isBillable) || statuses.find(s => s.isBillable);
-      
       if (!targetStatus) {
-          alert("No hay ningún estado configurado como 'Facturable' en Ajustes.");
+          addToast("No hay un estado facturable configurado.", "error");
           return;
       }
-
       const updated = { ...apt, statusId: targetStatus.id };
       setAppointments(appointments.map(a => a.id === apt.id ? updated : a));
       await dataService.saveAppointment(updated, uid);
+      addToast("Cita completada");
   };
 
   const handleDeleteApt = async () => {
       const uid = getUid(); if(!editingApt || !uid) return;
-      if (window.confirm("¿Eliminar cita?")) { await dataService.deleteAppointment(editingApt.id, uid); setAppointments(appointments.filter(a => a.id !== editingApt.id)); setAptModalOpen(false); }
+      setConfirmModalProps({
+          isOpen: true,
+          title: "¿Eliminar Cita?",
+          message: "¿Estás seguro de que quieres borrar esta cita permanentemente?",
+          onConfirm: async () => {
+            await dataService.deleteAppointment(editingApt.id, uid); 
+            setAppointments(appointments.filter(a => a.id !== editingApt.id)); 
+            setAptModalOpen(false);
+            addToast("Cita eliminada", "info");
+          }
+      });
   };
 
-  // --- Move/Copy Logic ---
   const handleDropAppointment = (apt: Appointment, date: Date, time: string) => {
       setMoveRequest({ apt, date, time });
   };
-  const executeMove = async () => { if(!moveRequest) return; const uid = getUid(); if(!uid) return; const updated = { ...moveRequest.apt, date: moveRequest.date.toISOString(), startTime: moveRequest.time }; setAppointments(appointments.map(a => a.id === updated.id ? updated : a)); await dataService.saveAppointment(updated, uid); setMoveRequest(null); };
-  const executeCopy = async () => { if(!moveRequest) return; const uid = getUid(); if(!uid) return; const { id, ...rest } = moveRequest.apt; const copied = { ...rest, date: moveRequest.date.toISOString(), startTime: moveRequest.time }; const saved = await dataService.saveAppointment(copied as Appointment, uid); setAppointments([...appointments, saved]); setMoveRequest(null); };
+  const executeMove = async () => { if(!moveRequest) return; const uid = getUid(); if(!uid) return; const updated = { ...moveRequest.apt, date: moveRequest.date.toISOString(), startTime: moveRequest.time }; setAppointments(appointments.map(a => a.id === updated.id ? updated : a)); await dataService.saveAppointment(updated, uid); setMoveRequest(null); addToast("Cita movida"); };
+  const executeCopy = async () => { if(!moveRequest) return; const uid = getUid(); if(!uid) return; const { id, ...rest } = moveRequest.apt; const copied = { ...rest, date: moveRequest.date.toISOString(), startTime: moveRequest.time }; const saved = await dataService.saveAppointment(copied as Appointment, uid); setAppointments([...appointments, saved]); setMoveRequest(null); addToast("Cita copiada"); };
 
-  // --- Staff Logic ---
-  const handleSaveStaff = async (e: React.FormEvent) => { e.preventDefault(); const uid = getUid(); if(!uid || !staffForm.name) return; const saved = await dataService.saveStaff({ id: editingStaff?.id || '', name: staffForm.name, defaultRate: Number(staffForm.defaultRate) || 0, rates: staffForm.rates || {}, specialties: staffForm.specialties || [], color: staffForm.color || 'bg-gray-100 text-gray-800', createdAt: Date.now() }, uid); if (editingStaff) setStaff(staff.map(s => s.id === saved.id ? saved : s)); else setStaff([...staff, saved]); setStaffModalOpen(false); };
+  const handleSaveStaff = async (e: React.FormEvent) => { e.preventDefault(); const uid = getUid(); if(!uid || !staffForm.name) return; const saved = await dataService.saveStaff({ id: editingStaff?.id || '', name: staffForm.name, defaultRate: Number(staffForm.defaultRate) || 0, rates: staffForm.rates || {}, specialties: staffForm.specialties || [], color: staffForm.color || 'bg-gray-100 text-gray-800', createdAt: Date.now() }, uid); if (editingStaff) setStaff(staff.map(s => s.id === saved.id ? saved : s)); else setStaff([...staff, saved]); setStaffModalOpen(false); addToast("Miembro de equipo guardado"); };
   
   const handleDeleteStaffRequest = (staffMember: Staff) => {
     const futureAppointments = appointments.filter(apt => apt.staffId === staffMember.id && isFuture(new Date(apt.date)));
-    
     let message: React.ReactNode = `¿Estás seguro de que quieres eliminar a "${staffMember.name}"?`;
     if (futureAppointments.length > 0) {
         message = (
             <>
                 <p>{`¿Estás seguro de que quieres eliminar a "${staffMember.name}"?`}</p>
                 <p className="mt-4 font-bold text-amber-600 dark:text-amber-400">
-                    ADVERTENCIA: Este miembro del equipo tiene {futureAppointments.length} cita(s) futura(s) programada(s).
+                    ADVERTENCIA: Este miembro tiene {futureAppointments.length} cita(s) futura(s).
                 </p>
             </>
         );
     }
-
     setConfirmModalProps({
         isOpen: true,
         title: 'Confirmar Eliminación',
@@ -475,44 +473,33 @@ const App: React.FC = () => {
             const uid = getUid(); if(!uid) return;
             await dataService.deleteStaff(staffMember.id, uid);
             setStaff(staff.filter(s => s.id !== staffMember.id));
-            if (selectedStaffIdForDetailView === staffMember.id) {
-                handleBackFromDetail();
-            }
+            if (selectedStaffIdForDetailView === staffMember.id) handleBackFromDetail();
+            addToast("Personal eliminado", "info");
         },
     });
   };
 
-  // --- Status Logic (UPDATED for Exclusivity) ---
   const handleSaveStatus = async (status: Partial<AppStatus>) => {
       const uid = getUid(); if(!uid) return;
-
-      // Handle exclusivity of default status locally to avoid race conditions visually
       let updatedStatuses = [...statuses];
       if (status.isDefault) {
-          // Unset default from others
           updatedStatuses = updatedStatuses.map(s => {
               if (s.id !== status.id && s.isDefault) {
-                  // We also need to save this change to DB
                   dataService.saveStatus({ ...s, isDefault: false }, uid);
                   return { ...s, isDefault: false };
               }
               return s;
           });
       }
-
       const saved = await dataService.saveStatus(status as AppStatus, uid);
       const exists = updatedStatuses.find(s => s.id === saved.id);
-      
-      if (exists) {
-          setStatuses(updatedStatuses.map(s => s.id === saved.id ? saved : s));
-      } else {
-          setStatuses([...updatedStatuses, saved]);
-      }
+      if (exists) setStatuses(updatedStatuses.map(s => s.id === saved.id ? saved : s));
+      else setStatuses([...updatedStatuses, saved]);
+      addToast("Estado guardado");
   };
   
-  const handleDeleteStatus = async (id: string) => { const uid = getUid(); if(!uid) return; await dataService.deleteStatus(id, uid); setStatuses(statuses.filter(s => s.id !== id)); };
+  const handleDeleteStatus = async (id: string) => { const uid = getUid(); if(!uid) return; await dataService.deleteStatus(id, uid); setStatuses(statuses.filter(s => s.id !== id)); addToast("Estado eliminado", "info"); };
 
-  // --- Client Logic ---
   const handleSaveClient = async (e: React.FormEvent) => { 
       e.preventDefault(); 
       const uid = getUid(); 
@@ -527,28 +514,26 @@ const App: React.FC = () => {
       if(editingClient) setClients(clients.map(c=>c.id===saved.id?saved:c)); 
       else setClients([...clients, saved]); 
       setClientModalOpen(false); 
-      // If client was edited from detail page, update detail view
       if (selectedClientIdForDetailView === saved.id) {
-          setSelectedClientIdForDetailView(null); // Force re-render of detail page with fresh data
+          setSelectedClientIdForDetailView(null);
           setTimeout(() => setSelectedClientIdForDetailView(saved.id), 0);
       }
+      addToast("Cliente guardado");
   };
 
   const handleDeleteClientRequest = (client: Client) => {
     const clientApts = appointments.filter(apt => apt.clientId === client.id && isFuture(new Date(apt.date)));
-
     let message: React.ReactNode = `¿Estás seguro de que quieres eliminar a "${client.name}"? Se borrarán todas sus citas e historial.`;
     if (clientApts.length > 0) {
         message = (
             <>
                 <p>{`¿Estás seguro de que quieres eliminar a "${client.name}"? Se borrarán todas sus citas e historial.`}</p>
                 <p className="mt-4 font-bold text-amber-600 dark:text-amber-400">
-                    ADVERTENCIA: Este cliente tiene {clientApts.length} cita(s) futura(s) programada(s).
+                    ADVERTENCIA: Este cliente tiene {clientApts.length} cita(s) futura(s).
                 </p>
             </>
         );
     }
-    
     setConfirmModalProps({
         isOpen: true,
         title: `Eliminar Cliente`,
@@ -557,37 +542,27 @@ const App: React.FC = () => {
             const uid = getUid(); if(!uid) return; 
             await dataService.deleteClient(client.id, uid); 
             setClients(clients.filter(c => c.id !== client.id));
-            if (selectedClientIdForDetailView === client.id) {
-                handleBackFromDetail();
-            }
+            if (selectedClientIdForDetailView === client.id) handleBackFromDetail();
+            addToast("Cliente eliminado", "info");
         }
     });
   };
   
-  // --- New: Treatment Finished Logic ---
   const handleToggleTreatmentFinished = async (clientId: string, serviceId: string) => {
       const uid = getUid();
       if (!uid) return;
-
       const clientToUpdate = clients.find(c => c.id === clientId);
       if (!clientToUpdate) return;
-
       const finished = clientToUpdate.finishedTreatments || [];
       const isFinished = finished.includes(serviceId);
-      
-      const newFinishedTreatments = isFinished
-          ? finished.filter(id => id !== serviceId)
-          : [...finished, serviceId];
-      
+      const newFinishedTreatments = isFinished ? finished.filter(id => id !== serviceId) : [...finished, serviceId];
       const updatedClient = { ...clientToUpdate, finishedTreatments: newFinishedTreatments };
-
       const saved = await dataService.saveClient(updatedClient, uid);
       setClients(clients.map(c => c.id === saved.id ? saved : c));
+      addToast(isFinished ? "Seguimiento reactivado" : "Tratamiento finalizado");
   };
 
-
-  // --- Service Logic ---
-  const handleSaveService = async (e: React.FormEvent) => { e.preventDefault(); const uid = getUid(); if(!uid) return; const saved = await dataService.saveService({...serviceForm, id: editingService?.id || ''} as ServiceType, uid); if(editingService) setServices(services.map(s=>s.id===saved.id?saved:s)); else setServices([...services, saved]); setServiceModalOpen(false); };
+  const handleSaveService = async (e: React.FormEvent) => { e.preventDefault(); const uid = getUid(); if(!uid) return; const saved = await dataService.saveService({...serviceForm, id: editingService?.id || ''} as ServiceType, uid); if(editingService) setServices(services.map(s=>s.id===saved.id?saved:s)); else setServices([...services, saved]); setServiceModalOpen(false); addToast("Tratamiento guardado"); };
   
   const handleDeleteServiceRequest = (service: ServiceType & { activeCount: number }) => {
     let message: React.ReactNode = `¿Estás seguro de que quieres eliminar el tratamiento "${service.name}"?`;
@@ -596,12 +571,11 @@ const App: React.FC = () => {
             <>
                 <p>{`¿Estás seguro de que quieres eliminar "${service.name}"?`}</p>
                 <p className="mt-4 font-bold text-amber-600 dark:text-amber-400">
-                    ADVERTENCIA: Este tratamiento tiene {service.activeCount} cliente(s) con un ciclo activo.
+                    ADVERTENCIA: Este tratamiento tiene {service.activeCount} cliente(s) activos.
                 </p>
             </>
         );
     }
-
     setConfirmModalProps({
         isOpen: true,
         title: 'Confirmar Eliminación',
@@ -610,10 +584,18 @@ const App: React.FC = () => {
             const uid = getUid(); if(!uid) return;
             await dataService.deleteService(service.id, uid);
             setServices(services.filter(s => s.id !== service.id));
+            addToast("Tratamiento eliminado", "info");
         },
     });
   };
 
+  const handleSaveSettings = (newSettings: AppSettings) => {
+      const uid = getUid();
+      if (!uid) return;
+      setSettings(newSettings);
+      localStorage.setItem(`settings-${uid}`, JSON.stringify(newSettings));
+      addToast("Ajustes guardados");
+  };
 
   if (authLoading) return <div className="h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div></div>;
   if (!user && !isGuest) return <LoginView onGuestLogin={() => setIsGuest(true)} />;
@@ -668,7 +650,7 @@ const App: React.FC = () => {
         {activeTab === 'client-detail' && currentClientInDetailView && (
             <ClientDetailPage
                 client={currentClientInDetailView}
-                clients={clients} // Pass all clients for general context if needed
+                clients={clients}
                 appointments={appointments}
                 services={services}
                 statuses={statuses}
@@ -685,7 +667,6 @@ const App: React.FC = () => {
                 services={services}
                 clients={clients}
                 appointments={appointments}
-                // FIX: Passed statuses prop to resolve error.
                 statuses={statuses}
                 onAdd={() => {setEditingService(null); setServiceForm({color: 'bg-teal-100 text-teal-800'}); setServiceModalOpen(true)}} 
                 onEdit={(s) => {setEditingService(s); setServiceForm(s); setServiceModalOpen(true)}} 
@@ -732,14 +713,10 @@ const App: React.FC = () => {
         )}
         {activeTab === 'analytics' && <AnalyticsDashboard clients={clients} appointments={appointments} services={services} statuses={statuses} staff={staff} onViewClient={handleViewClient} />}
         {activeTab === 'financial' && <FinancialReport clients={clients} appointments={appointments} services={services} statuses={statuses} staff={staff} onViewClient={handleViewClient} />}
-        
-        {/* Pass RestartTour handler to Settings */}
-        {activeTab === 'settings' && <SettingsView statuses={statuses} onSaveStatus={handleSaveStatus} onDeleteStatus={handleDeleteStatus} onRestartTour={handleRestartTour} />}
+        {activeTab === 'settings' && <SettingsView statuses={statuses} settings={settings} onSaveSettings={handleSaveSettings} onSaveStatus={handleSaveStatus} onDeleteStatus={handleDeleteStatus} onRestartTour={handleRestartTour} />}
 
-        {/* --- TOUR --- */}
         <OnboardingTour isOpen={showTour} onClose={handleTourClose} />
 
-        {/* --- MODALS --- */}
         <ConfirmationModal
             isOpen={confirmModalProps.isOpen}
             onClose={() => setConfirmModalProps({ ...confirmModalProps, isOpen: false })}
@@ -748,7 +725,28 @@ const App: React.FC = () => {
             message={confirmModalProps.message}
         />
 
-        {/* --- APPOINTMENT MODAL --- */}
+        {/* Toast Container */}
+        <div className="fixed top-4 right-4 z-[200] flex flex-col space-y-2 max-w-sm w-full pointer-events-none">
+            {toasts.map(toast => (
+                <div 
+                    key={toast.id} 
+                    className={`p-4 rounded-xl shadow-lg border flex items-center gap-3 animate-fade-in-up pointer-events-auto ${
+                        toast.type === 'success' ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300' :
+                        toast.type === 'error' ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300' :
+                        'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300'
+                    }`}
+                >
+                    {toast.type === 'success' && <CheckCircle className="w-5 h-5 shrink-0" />}
+                    {toast.type === 'error' && <AlertCircle className="w-5 h-5 shrink-0" />}
+                    {toast.type === 'info' && <Info className="w-5 h-5 shrink-0" />}
+                    <p className="text-sm font-medium">{toast.message}</p>
+                    <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="ml-auto opacity-60 hover:opacity-100 transition-opacity">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            ))}
+        </div>
+
         <Modal isOpen={isAptModalOpen} onClose={() => setAptModalOpen(false)} title={editingApt ? "Editar Cita" : "Nueva Cita"}>
             <form onSubmit={handleSaveApt} className="space-y-4">
                 <div>
@@ -758,18 +756,9 @@ const App: React.FC = () => {
                         appointments={appointments}
                         statuses={statuses}
                         value={aptForm.clientId || ''}
-                        onChange={(id) => setAptForm(prev => ({...prev, clientId: id}))} // Use functional update
+                        onChange={(id) => setAptForm(prev => ({...prev, clientId: id}))}
                         required
                     />
-                    {aptForm.clientId && (
-                        <button 
-                            type="button" 
-                            onClick={() => { setAptModalOpen(false); handleViewClient(aptForm.clientId!); }}
-                            className="mt-2 flex items-center text-sm text-gray-700 dark:text-gray-300 hover:text-teal-600 dark:hover:text-teal-400"
-                        >
-                            <ArrowRight className="w-4 h-4 mr-1" /> Ver perfil completo del cliente
-                        </button>
-                    )}
                 </div>
                 <div>
                     <label className={labelClass}>Tratamiento</label>
@@ -780,7 +769,7 @@ const App: React.FC = () => {
                             serviceTypeId: e.target.value, 
                             basePrice: s?.defaultPrice || 0,
                             durationMinutes: s?.defaultDuration || 60 
-                        })); // price is updated by useEffect
+                        }));
                     }}>
                         <option value="">Seleccionar Tratamiento</option>
                         {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -790,16 +779,9 @@ const App: React.FC = () => {
                     <label className={labelClass}>Asignar a (Personal)</label>
                     <select className={inputClass} value={aptForm.staffId || ''} onChange={e => setAptForm({...aptForm, staffId: e.target.value})}>
                         <option value="">Sin asignar / Cualquiera</option>
-                        <optgroup label="Especialistas Recomendados">
-                            {staff.filter(s => s.specialties.includes(aptForm.serviceTypeId || '')).map(s => (
-                                <option key={s.id} value={s.id}>{s.name} ★</option>
-                            ))}
-                        </optgroup>
-                        <optgroup label="Otros Miembros">
-                            {staff.filter(s => !s.specialties.includes(aptForm.serviceTypeId || '')).map(s => (
-                                <option key={s.id} value={s.id}>{s.name}</option>
-                            ))}
-                        </optgroup>
+                        {staff.map(s => (
+                            <option key={s.id} value={s.id}>{s.name} {s.specialties.includes(aptForm.serviceTypeId || '') ? '★' : ''}</option>
+                        ))}
                     </select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -820,13 +802,53 @@ const App: React.FC = () => {
                                 setAptForm(prev => ({...prev, basePrice: newBasePrice, price: newFinalPrice}));
                             }} 
                         />
-                        {aptForm.basePrice !== undefined && (
-                            <div className="mt-1 text-xs text-gray-700 dark:text-gray-400">
-                                ({aptForm.discountPercentage || 0}% desc.) Precio Final: <span className="font-bold text-gray-900 dark:text-gray-200">{formatCurrency(aptForm.price || 0)}</span>
-                            </div>
-                        )}
                     </div>
                 </div>
+
+                {/* Booking Fee Section */}
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                        <input 
+                            type="checkbox" 
+                            className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 w-4 h-4"
+                            checked={aptForm.bookingFeePaid || false}
+                            onChange={e => setAptForm({...aptForm, bookingFeePaid: e.target.checked})}
+                        />
+                        <span className="text-sm font-semibold text-blue-800 dark:text-blue-300 flex items-center">
+                            <Wallet className="w-4 h-4 mr-1.5" /> Pago de Reserva realizado
+                        </span>
+                    </label>
+                    {aptForm.bookingFeePaid && (
+                        <div className="mt-2 pl-6">
+                            <label className="block text-xs font-medium text-blue-700 dark:text-blue-400 mb-1">Importe Reserva (€)</label>
+                            <input 
+                                type="number" 
+                                className="w-full rounded-md border-blue-200 dark:border-blue-800 shadow-sm p-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                value={aptForm.bookingFeeAmount || 0}
+                                onChange={e => setAptForm({...aptForm, bookingFeeAmount: Number(e.target.value)})}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* Final Price Summary */}
+                <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg flex flex-col gap-1 border border-gray-200 dark:border-gray-600">
+                    <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+                        <span>Total Tratamiento ({aptForm.discountPercentage || 0}% desc.):</span>
+                        <span className="font-medium">{formatCurrency(aptForm.price || 0)}</span>
+                    </div>
+                    {aptForm.bookingFeePaid && (
+                        <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
+                            <span>Reserva pagada:</span>
+                            <span>-{formatCurrency(aptForm.bookingFeeAmount || 0)}</span>
+                        </div>
+                    )}
+                    <div className="flex justify-between text-base font-bold text-gray-900 dark:text-white border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
+                        <span>Total a Cobrar:</span>
+                        <span>{formatCurrency((aptForm.price || 0) - (aptForm.bookingFeePaid ? (aptForm.bookingFeeAmount || 0) : 0))}</span>
+                    </div>
+                </div>
+
                 <div>
                     <label className={labelClass}>Estado</label>
                     <div className="flex gap-2">
@@ -839,8 +861,7 @@ const App: React.FC = () => {
                                 const target = statuses.find(s => s.isDefault && s.isBillable) || statuses.find(s => s.isBillable);
                                 if (target) setAptForm({...aptForm, statusId: target.id});
                             }}
-                            className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-400 p-2 rounded-md mt-1 border border-emerald-200 dark:border-emerald-800 transition-colors"
-                            title="Marcar como Realizada (Facturable)"
+                            className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 p-2 rounded-md mt-1 border border-emerald-200 dark:border-emerald-800"
                         >
                             <Check className="w-5 h-5" />
                         </button>
@@ -848,12 +869,7 @@ const App: React.FC = () => {
                 </div>
                 <div>
                     <label className={labelClass}>Notas</label>
-                    <textarea 
-                        className={`${inputClass} h-24`} 
-                        value={aptForm.notes || ''} 
-                        onChange={e => setAptForm({...aptForm, notes: e.target.value})} 
-                        placeholder="Añadir notas sobre la cita..."
-                    />
+                    <textarea className={`${inputClass} h-24`} value={aptForm.notes || ''} onChange={e => setAptForm({...aptForm, notes: e.target.value})} placeholder="Añadir notas..." />
                 </div>
                 <div className="flex gap-2 pt-2">
                     {editingApt && <button type="button" onClick={handleDeleteApt} className="flex-1 bg-red-100 text-red-600 p-2 rounded">Eliminar</button>}
@@ -862,36 +878,22 @@ const App: React.FC = () => {
             </form>
         </Modal>
 
-        {/* ... Other Modals (Staff, Client, Service) ... */}
         <Modal isOpen={isStaffModalOpen} onClose={() => setStaffModalOpen(false)} title={editingStaff ? "Editar Miembro" : "Nuevo Miembro"}>
             <form onSubmit={handleSaveStaff} className="space-y-4">
                 <div><label className={labelClass}>Nombre</label><input type="text" required className={inputClass} value={staffForm.name || ''} onChange={e => setStaffForm({...staffForm, name: e.target.value})} /></div>
                 <div><label className={labelClass}>Coste Hora Base (€)</label><input type="number" required className={inputClass} value={staffForm.defaultRate || ''} onChange={e => setStaffForm({...staffForm, defaultRate: Number(e.target.value)})} /></div>
-                <div>
-                    <label className={labelClass}>Especialidades y Tarifas Específicas</label>
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                        {services.map(s => {
-                            const isChecked = staffForm.specialties?.includes(s.id) || false;
-                            const specificRate = staffForm.rates?.[s.id];
-                            return (
-                                <div key={s.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-md">
-                                    <label className="flex items-center space-x-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                                        <input type="checkbox" checked={isChecked} onChange={e => {
-                                            const specs = staffForm.specialties || [];
-                                            setStaffForm({ ...staffForm, specialties: e.target.checked ? [...specs, s.id] : specs.filter(id => id !== s.id) });
-                                        }} className="rounded text-teal-600 focus:ring-teal-500" />
-                                        <span className={isChecked ? 'font-medium' : ''}>{s.name}</span>
-                                    </label>
-                                    {isChecked && (
-                                        <div className="flex items-center space-x-1">
-                                            <span className="text-xs text-gray-600">€/h:</span>
-                                            <input type="number" className="w-16 p-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 text-gray-700 dark:text-white" placeholder={staffForm.defaultRate?.toString()} value={specificRate ?? ''} onChange={e => { const val = e.target.value ? Number(e.target.value) : undefined; const newRates = { ...(staffForm.rates || {}) }; if (val !== undefined) newRates[s.id] = val; else delete newRates[s.id]; setStaffForm({ ...staffForm, rates: newRates }); }} />
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {services.map(s => (
+                        <div key={s.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-md">
+                            <label className="flex items-center space-x-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                                <input type="checkbox" checked={staffForm.specialties?.includes(s.id)} onChange={e => {
+                                    const specs = staffForm.specialties || [];
+                                    setStaffForm({ ...staffForm, specialties: e.target.checked ? [...specs, s.id] : specs.filter(id => id !== s.id) });
+                                }} className="rounded text-teal-600" />
+                                <span>{s.name}</span>
+                            </label>
+                        </div>
+                    ))}
                 </div>
                 <button type="submit" className="w-full bg-teal-600 text-white p-2 rounded">Guardar</button>
             </form>
@@ -904,14 +906,7 @@ const App: React.FC = () => {
                 <div><label className={labelClass}>Teléfono</label><input type="tel" className={inputClass} value={clientForm.phone || ''} onChange={e => setClientForm({...clientForm, phone: e.target.value})} /></div>
                 <div>
                     <label className={labelClass}>Descuento al cliente (%)</label>
-                    <input 
-                        type="number" 
-                        min="0" 
-                        max="100"
-                        className={inputClass} 
-                        value={clientForm.discountPercentage ?? 0} 
-                        onChange={e => setClientForm({...clientForm, discountPercentage: Number(e.target.value)})} 
-                    />
+                    <input type="number" min="0" max="100" className={inputClass} value={clientForm.discountPercentage ?? 0} onChange={e => setClientForm({...clientForm, discountPercentage: Number(e.target.value)})} />
                 </div>
                 <div><label className={labelClass}>Notas</label><textarea className={inputClass} value={clientForm.notes || ''} onChange={e => setClientForm({...clientForm, notes: e.target.value})} /></div>
                 <button type="submit" className="w-full bg-teal-600 text-white p-2 rounded">Guardar</button>
@@ -931,7 +926,6 @@ const App: React.FC = () => {
         </Modal>
 
         <MoveCopyModal isOpen={!!moveRequest} onClose={() => setMoveRequest(null)} onMove={executeMove} onCopy={executeCopy} />
-        
     </Layout>
   );
 };

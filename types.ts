@@ -1,5 +1,4 @@
 
-
 export interface AppStatus {
   id: string;
   name: string;
@@ -52,6 +51,8 @@ export interface Appointment {
   basePrice: number; // New field: The original price of the service before discount
   discountPercentage: number; // New field: The discount percentage applied to this specific appointment
   price: number; // This will be the FINAL price after discount
+  bookingFeePaid: boolean; // NEW: If the reservation was paid
+  bookingFeeAmount: number; // NEW: Amount of the reservation
   notes?: string; // New field: notes for the appointment
 }
 
@@ -76,6 +77,7 @@ export interface FinancialSummary {
 
 export interface AppSettings {
   currency: string;
+  defaultBookingFee: number; // NEW: Global setting for booking fee
 }
 
 // User Profile Type

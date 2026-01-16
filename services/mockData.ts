@@ -1,5 +1,4 @@
 
-
 import { Client, ServiceType, AppStatus, Staff, Appointment } from '../types';
 
 // Helpers to create static dates relative to "Now" to ensure analytics always look good
@@ -73,6 +72,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
         basePrice: MOCK_SERVICES.find(s => s.id === 's4')?.defaultPrice || 0,
         discountPercentage: MOCK_CLIENTS.find(c => c.id === 'c1')?.discountPercentage || 0,
         price: calculateFinalPrice(MOCK_SERVICES.find(s => s.id === 's4')?.defaultPrice || 0, MOCK_CLIENTS.find(c => c.id === 'c1')?.discountPercentage || 0),
+        bookingFeePaid: false, bookingFeeAmount: 0,
         notes: 'Revisión de ortodoncia pasada. Cliente muy satisfecho con el progreso.' 
     },
 
@@ -84,6 +84,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
         basePrice: MOCK_SERVICES.find(s => s.id === 's2')?.defaultPrice || 0,
         discountPercentage: MOCK_CLIENTS.find(c => c.id === 'c2')?.discountPercentage || 0,
         price: calculateFinalPrice(MOCK_SERVICES.find(s => s.id === 's2')?.defaultPrice || 0, MOCK_CLIENTS.find(c => c.id === 'c2')?.discountPercentage || 0),
+        bookingFeePaid: false, bookingFeeAmount: 0,
         notes: 'Limpieza profunda. Recomendar en 5 días.' 
     },
 
@@ -95,6 +96,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
         basePrice: MOCK_SERVICES.find(s => s.id === 's1')?.defaultPrice || 0,
         discountPercentage: MOCK_CLIENTS.find(c => c.id === 'c3')?.discountPercentage || 0,
         price: calculateFinalPrice(MOCK_SERVICES.find(s => s.id === 's1')?.defaultPrice || 0, MOCK_CLIENTS.find(c => c.id === 'c3')?.discountPercentage || 0),
+        bookingFeePaid: false, bookingFeeAmount: 0,
         notes: 'Botox con muy buenos resultados. Revisar al mes.' 
     },
 
@@ -106,6 +108,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
         basePrice: MOCK_SERVICES.find(s => s.id === 's4')?.defaultPrice || 0,
         discountPercentage: MOCK_CLIENTS.find(c => c.id === 'c4')?.discountPercentage || 0,
         price: calculateFinalPrice(MOCK_SERVICES.find(s => s.id === 's4')?.defaultPrice || 0, MOCK_CLIENTS.find(c => c.id === 'c4')?.discountPercentage || 0),
+        bookingFeePaid: false, bookingFeeAmount: 0,
         notes: 'Seguimiento de ortodoncia. Pequeño ajuste.' 
     },
 
@@ -117,6 +120,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
         basePrice: MOCK_SERVICES.find(s => s.id === 's3')?.defaultPrice || 0,
         discountPercentage: MOCK_CLIENTS.find(c => c.id === 'c6')?.discountPercentage || 0,
         price: calculateFinalPrice(MOCK_SERVICES.find(s => s.id === 's3')?.defaultPrice || 0, MOCK_CLIENTS.find(c => c.id === 'c6')?.discountPercentage || 0),
+        bookingFeePaid: false, bookingFeeAmount: 0,
         notes: 'Blanqueamiento antiguo. Contactar para recordatorio, aunque se ha mudado.' 
     },
 
@@ -127,6 +131,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
         basePrice: MOCK_SERVICES.find(s => s.id === 's1')?.defaultPrice || 0,
         discountPercentage: MOCK_CLIENTS.find(c => c.id === 'c4')?.discountPercentage || 0,
         price: calculateFinalPrice(MOCK_SERVICES.find(s => s.id === 's1')?.defaultPrice || 0, MOCK_CLIENTS.find(c => c.id === 'c4')?.discountPercentage || 0),
+        bookingFeePaid: false, bookingFeeAmount: 0,
         notes: 'Botox facial completo, cliente pidió un extra en la zona de la frente.'
     }, 
     { 
@@ -135,6 +140,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
         basePrice: MOCK_SERVICES.find(s => s.id === 's3')?.defaultPrice || 0,
         discountPercentage: MOCK_CLIENTS.find(c => c.id === 'c5')?.discountPercentage || 0,
         price: calculateFinalPrice(MOCK_SERVICES.find(s => s.id === 's3')?.defaultPrice || 0, MOCK_CLIENTS.find(c => c.id === 'c5')?.discountPercentage || 0),
+        bookingFeePaid: true, bookingFeeAmount: 20,
         notes: 'Primera sesión de blanqueamiento. Comentar sobre mantenimiento en casa.'
     },
     { 
@@ -143,6 +149,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
         basePrice: MOCK_SERVICES.find(s => s.id === 's2')?.defaultPrice || 0,
         discountPercentage: MOCK_CLIENTS.find(c => c.id === 'c1')?.discountPercentage || 0,
         price: calculateFinalPrice(MOCK_SERVICES.find(s => s.id === 's2')?.defaultPrice || 0, MOCK_CLIENTS.find(c => c.id === 'c1')?.discountPercentage || 0),
+        bookingFeePaid: false, bookingFeeAmount: 0,
         notes: 'Limpieza anual. Recordar al cliente sobre higiene interdental.'
     },
     { 
@@ -151,6 +158,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
         basePrice: MOCK_SERVICES.find(s => s.id === 's5')?.defaultPrice || 0,
         discountPercentage: MOCK_CLIENTS.find(c => c.id === 'c2')?.discountPercentage || 0,
         price: calculateFinalPrice(MOCK_SERVICES.find(s => s.id === 's5')?.defaultPrice || 0, MOCK_CLIENTS.find(c => c.id === 'c2')?.discountPercentage || 0),
+        bookingFeePaid: true, bookingFeeAmount: 50,
         notes: 'Consulta inicial para implante. Confirmar con laboratorio.'
     },
     { 
@@ -159,6 +167,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
         basePrice: MOCK_SERVICES.find(s => s.id === 's4')?.defaultPrice || 0,
         discountPercentage: MOCK_CLIENTS.find(c => c.id === 'c3')?.discountPercentage || 0,
         price: calculateFinalPrice(MOCK_SERVICES.find(s => s.id === 's4')?.defaultPrice || 0, MOCK_CLIENTS.find(c => c.id === 'c3')?.discountPercentage || 0),
+        bookingFeePaid: false, bookingFeeAmount: 0,
         notes: 'Cliente no se presentó. Intentar re-agendar por teléfono.'
     },
     { 
@@ -167,6 +176,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
         basePrice: MOCK_SERVICES.find(s => s.id === 's1')?.defaultPrice || 0,
         discountPercentage: MOCK_CLIENTS.find(c => c.id === 'c4')?.discountPercentage || 0,
         price: calculateFinalPrice(MOCK_SERVICES.find(s => s.id === 's1')?.defaultPrice || 0, MOCK_CLIENTS.find(c => c.id === 'c4')?.discountPercentage || 0),
+        bookingFeePaid: false, bookingFeeAmount: 0,
         notes: 'Canceló por viaje de última hora. Re-agendar para la semana siguiente.'
     },
 ];
