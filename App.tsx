@@ -15,6 +15,7 @@ import { ClientDetailPage } from './components/ClientDetailPage';
 import { ServiceDetailPage } from './components/ServiceDetailPage'; 
 import { StaffDetailPage } from './components/StaffDetailPage';
 import { dataService } from './services/dataService';
+import { ALLOWED_EMAILS } from './config';
 import { Client, ServiceType, Appointment, AppStatus, Staff, UserProfile, AppSettings, InventoryItem, AppointmentInventorySale, InventoryMovement } from './types';
 import { X, Check, Copy, ArrowRight, Trash, LogOut, Mail, Phone, Calendar as CalendarIcon, Move, Edit2, EyeOff, Eye, Lightbulb, Plus, AlertTriangle, Wallet, CheckCircle, Info, AlertCircle, Box, ShoppingCart } from 'lucide-react';
 import { format, addDays, isFuture, isSameDay } from 'date-fns';
@@ -167,6 +168,16 @@ const App: React.FC = () => {
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
       if (currentUser) {
+          // Check if email is allowed
+          const userEmail = currentUser.email?.toLowerCase();
+          const isAllowed = ALLOWED_EMAILS.some(email => email.toLowerCase() === userEmail);
+
+          if (!isAllowed) {
+              await auth.signOut();
+              addToast('Tu cuenta no está autorizada para acceder a esta aplicación.', 'error');
+              return;
+          }
+
           setUser(currentUser);
           setIsGuest(false);
           const profile = await dataService.getUserProfile(currentUser);
@@ -178,7 +189,7 @@ const App: React.FC = () => {
       setAuthLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [addToast]);
 
   useEffect(() => {
       const tourCompleted = localStorage.getItem('clinicflow-tour-completed');

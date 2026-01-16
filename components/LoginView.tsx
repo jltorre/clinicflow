@@ -19,10 +19,25 @@ export const LoginView: React.FC<LoginViewProps> = ({ onGuestLogin }) => {
     setError('');
     try {
       // FIX: Use v8 namespaced API for signInWithPopup.
-      await auth.signInWithPopup(googleProvider);
+      const result = await auth.signInWithPopup(googleProvider);
+      
+      // Check whitelist after login to provide immediate feedback
+      const userEmail = result.user?.email?.toLowerCase();
+      const { ALLOWED_EMAILS } = await import('../config');
+      const isAllowed = ALLOWED_EMAILS.some(email => email.toLowerCase() === userEmail);
+
+      if (!isAllowed) {
+          await auth.signOut();
+          setError('Tu cuenta no está autorizada para acceder a esta aplicación.');
+          return;
+      }
     } catch (err: any) {
       console.error("Login failed:", err);
-      setError('No se pudo iniciar sesión. Inténtalo de nuevo.');
+      if (err.code === 'auth/popup-closed-by-user') {
+          setError('La ventana de inicio de sesión se cerró antes de completar el proceso.');
+      } else {
+          setError('No se pudo iniciar sesión. Inténtalo de nuevo.');
+      }
     } finally {
       setLoading(false);
     }
