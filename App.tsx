@@ -129,7 +129,7 @@ const App: React.FC = () => {
   const [isGuest, setIsGuest] = useState(false);
   const [activeTab, setActiveTab] = useState('calendar');
   const [previousTab, setPreviousTab] = useState('clients');
-  const [inventoryYear, setInventoryYear] = useState(new Date().getFullYear());
+  const [managementYear, setManagementYear] = useState(new Date().getFullYear());
   
   const [clients, setClients] = useState<Client[]>([]);
   const [services, setServices] = useState<ServiceType[]>([]);
@@ -863,6 +863,8 @@ const App: React.FC = () => {
                 clients={clients}
                 appointments={appointments}
                 statuses={statuses}
+                year={managementYear}
+                onYearChange={setManagementYear}
                 onAdd={() => {setEditingClient(null); setClientForm({discountPercentage: 0}); setClientModalOpen(true)}} 
                 onEdit={(c) => {setEditingClient(c); setClientForm(c); setClientModalOpen(true)}} 
                 onDeleteRequest={handleDeleteClientRequest} 
@@ -890,6 +892,8 @@ const App: React.FC = () => {
                 clients={clients}
                 appointments={appointments}
                 statuses={statuses}
+                year={managementYear}
+                onYearChange={setManagementYear}
                 onAdd={() => {setEditingService(null); setServiceForm({color: 'bg-teal-100 text-teal-800'}); setServiceModalOpen(true)}} 
                 onEdit={(s) => {setEditingService(s); setServiceForm(s); setServiceModalOpen(true)}} 
                 onDeleteRequest={handleDeleteServiceRequest}
@@ -915,6 +919,8 @@ const App: React.FC = () => {
                 services={services} 
                 appointments={appointments}
                 statuses={statuses}
+                year={managementYear}
+                onYearChange={setManagementYear}
                 onAdd={() => {setEditingStaff(null); setStaffForm({color: 'bg-gray-100 text-gray-800', rates: {}}); setStaffModalOpen(true)}} 
                 onEdit={(s) => {setEditingStaff(s); setStaffForm(s); setStaffModalOpen(true)}} 
                 onDeleteRequest={handleDeleteStaffRequest}
@@ -937,8 +943,8 @@ const App: React.FC = () => {
             <InventoryList 
                 inventory={inventory} 
                 appointments={appointments} 
-                year={inventoryYear}
-                onYearChange={setInventoryYear}
+                year={managementYear}
+                onYearChange={setManagementYear}
                 onAdd={() => {setEditingInventory(null); setInventoryForm({stock: 0, costPrice: 0, salePrice: 0}); setInventoryModalOpen(true)}} 
                 onEdit={(item) => {setEditingInventory(item); setInventoryForm(item); setInventoryModalOpen(true)}} 
                 onUpdate={(item) => setInventory(inventory.map(i => i.id === item.id ? item : i))}
@@ -953,7 +959,7 @@ const App: React.FC = () => {
                 onDeleteMovement={handleDeleteMovement}
                 onSaveMovement={handleSaveMovement}
                 formatCurrency={formatCurrency}
-                initialYear={inventoryYear}
+                initialYear={managementYear}
             />
         )}
         {activeTab === 'analytics' && <AnalyticsDashboard clients={clients} appointments={appointments} services={services} statuses={statuses} staff={staff} inventory={inventory} onViewClient={handleViewClient} />}

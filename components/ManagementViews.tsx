@@ -21,6 +21,8 @@ interface ClientListProps {
   clients: Client[];
   appointments: Appointment[];
   statuses: AppStatus[];
+  year: number;
+  onYearChange: (year: number) => void;
   onAdd: () => void;
   onEdit: (c: Client) => void;
   onDeleteRequest: (c: Client) => void;
@@ -49,7 +51,7 @@ const KPIWidget: React.FC<{ icon: any; label: string; value: string | number; }>
     </div>
 );
 
-export const ClientList: React.FC<ClientListProps> = ({ clients, appointments, statuses, onAdd, onEdit, onDeleteRequest, onViewClient }) => {
+export const ClientList: React.FC<ClientListProps> = ({ clients, appointments, statuses, year, onYearChange, onAdd, onEdit, onDeleteRequest, onViewClient }) => {
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'totalSpent', direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
@@ -57,8 +59,9 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, appointments, s
   
   const clientsWithStats = useMemo(() => {
     return clients.map(client => {
-      const clientApts = appointments.filter(apt => apt.clientId === client.id);
-      const billableApts = appointments.filter(apt => apt.clientId === client.id && isBillable(apt.statusId, statuses));
+      const yearApts = appointments.filter(apt => new Date(apt.date).getFullYear() === year);
+      const clientApts = yearApts.filter(apt => apt.clientId === client.id);
+      const billableApts = yearApts.filter(apt => apt.clientId === client.id && isBillable(apt.statusId, statuses));
       const totalSpent = billableApts.reduce((sum, apt) => sum + apt.price + (apt.inventoryTotal || 0), 0);
       const visits = billableApts.length;
       
@@ -172,9 +175,18 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, appointments, s
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Clientes</h1>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Base de datos de pacientes</p>
                 </div>
-                <button onClick={onAdd} className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 flex items-center shadow-sm shrink-0 md:order-last">
-                    <Plus className="w-4 h-4 md:mr-2" /> <span className="hidden md:inline">Nuevo Cliente</span>
-                </button>
+                <div className="flex items-center gap-3 md:order-last shrink-0">
+                    <select 
+                        className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                        value={year}
+                        onChange={e => onYearChange(Number(e.target.value))}
+                    >
+                        {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <button onClick={onAdd} className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 flex items-center shadow-sm whitespace-nowrap">
+                        <Plus className="w-4 h-4 md:mr-2" /> <span className="hidden md:inline">Nuevo Cliente</span>
+                    </button>
+                </div>
             </div>
 
              {/* KPIs */}
@@ -344,18 +356,21 @@ interface StaffListProps {
     services: ServiceType[];
     appointments: Appointment[];
     statuses: AppStatus[];
+    year: number;
+    onYearChange: (year: number) => void;
     onAdd: () => void;
     onEdit: (s: Staff) => void;
     onDeleteRequest: (s: Staff) => void;
     onViewStaff: (id: string) => void;
 }
 
-export const StaffList: React.FC<StaffListProps> = ({ staff, services, appointments, statuses, onAdd, onEdit, onDeleteRequest, onViewStaff }) => {
+export const StaffList: React.FC<StaffListProps> = ({ staff, services, appointments, statuses, year, onYearChange, onAdd, onEdit, onDeleteRequest, onViewStaff }) => {
     const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'realizedRevenue', direction: 'desc' });
 
     const staffWithStats = useMemo(() => {
         return staff.map(member => {
-            const memberApts = appointments.filter(a => a.staffId === member.id);
+            const yearApts = appointments.filter(a => new Date(a.date).getFullYear() === year);
+            const memberApts = yearApts.filter(a => a.staffId === member.id);
             let realizedRevenue = 0;
             let scheduledRevenue = 0;
             let realizedHours = 0;
@@ -433,9 +448,18 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, services, appointme
                         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Equipo</h1>
                         <p className="text-sm text-gray-600 dark:text-gray-400">Gestiona especialistas y analiza su rendimiento</p>
                     </div>
-                    <button onClick={onAdd} className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 flex items-center shadow-sm">
-                        <Plus className="w-4 h-4 mr-2" /> Nuevo Miembro
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <select 
+                            className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                            value={year}
+                            onChange={e => onYearChange(Number(e.target.value))}
+                        >
+                            {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                        <button onClick={onAdd} className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 flex items-center shadow-sm whitespace-nowrap">
+                            <Plus className="w-4 h-4 mr-2" /> <span className="hidden sm:inline">Nuevo Miembro</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow ring-1 ring-gray-200 dark:ring-gray-700 overflow-hidden">
@@ -797,8 +821,9 @@ interface ServiceListProps {
   services: ServiceType[];
   clients: Client[];
   appointments: Appointment[];
-  // FIX: Added statuses prop to fix undefined variable error.
   statuses: AppStatus[];
+  year: number;
+  onYearChange: (year: number) => void;
   onAdd: () => void;
   onEdit: (s: ServiceType) => void;
   onDeleteRequest: (s: ServiceWithStats) => void;
@@ -806,7 +831,7 @@ interface ServiceListProps {
 }
 
 // FIX: Added statuses to destructuring props.
-export const ServiceList: React.FC<ServiceListProps> = ({ services, clients, appointments, statuses, onAdd, onEdit, onDeleteRequest, onViewService }) => {
+export const ServiceList: React.FC<ServiceListProps> = ({ services, clients, appointments, statuses, year, onYearChange, onAdd, onEdit, onDeleteRequest, onViewService }) => {
     const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'realizedRevenue', direction: 'desc' });
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -817,7 +842,9 @@ export const ServiceList: React.FC<ServiceListProps> = ({ services, clients, app
             let realizedRevenue = 0;
             let scheduledRevenue = 0;
 
-            appointments.forEach(apt => {
+            const yearApts = appointments.filter(apt => new Date(apt.date).getFullYear() === year);
+
+            yearApts.forEach(apt => {
                 if (apt.serviceTypeId === service.id) {
                     clientIdsWithService.add(apt.clientId);
                     // FIX: statuses is now defined and can be used here.
@@ -908,9 +935,18 @@ export const ServiceList: React.FC<ServiceListProps> = ({ services, clients, app
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tratamientos</h1>
                     <p className="text-sm text-gray-600 dark:text-gray-400">Catálogo de servicios y análisis de rendimiento</p>
                 </div>
-                <button onClick={onAdd} className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 flex items-center shadow-sm">
-                    <Plus className="w-4 h-4 mr-2" /> Nuevo
-                </button>
+                <div className="flex items-center gap-3">
+                    <select 
+                        className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                        value={year}
+                        onChange={e => onYearChange(Number(e.target.value))}
+                    >
+                        {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <button onClick={onAdd} className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 flex items-center shadow-sm whitespace-nowrap">
+                        <Plus className="w-4 h-4 mr-2" /> <span className="hidden sm:inline">Nuevo</span>
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
