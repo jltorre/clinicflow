@@ -65,12 +65,12 @@ export const StaffDetailPage: React.FC<StaffDetailPageProps> = ({
             const cost = hours * hourlyRate;
             
             if (isBillable(apt.statusId, statuses)) { // Considered realized
-                realizedRevenue += apt.price;
+                realizedRevenue += apt.price + (apt.inventoryTotal || 0);
                 realizedCost += cost;
                 realizedHours += hours;
                 realizedCount++;
             } else if (isFuture(aptDate) || isSameDay(aptDate, new Date())) { // Considered scheduled
-                scheduledRevenue += apt.price;
+                scheduledRevenue += apt.price + (apt.inventoryTotal || 0);
                 scheduledCost += cost;
                 scheduledHours += hours;
                 scheduledCount++;
@@ -116,10 +116,10 @@ export const StaffDetailPage: React.FC<StaffDetailPageProps> = ({
                     const rate = staffMember.rates?.[apt.serviceTypeId] ?? staffMember.defaultRate;
                     const cost = hours * rate;
 
-                    breakdown[apt.serviceTypeId].revenue += apt.price;
+                    breakdown[apt.serviceTypeId].revenue += apt.price + (apt.inventoryTotal || 0);
                     breakdown[apt.serviceTypeId].hours += hours;
                     breakdown[apt.serviceTypeId].cost += cost;
-                    breakdown[apt.serviceTypeId].profit += (apt.price - cost);
+                    breakdown[apt.serviceTypeId].profit += (apt.price + (apt.inventoryTotal || 0) - cost);
                     breakdown[apt.serviceTypeId].count++;
                 }
             }
@@ -260,7 +260,7 @@ export const StaffDetailPage: React.FC<StaffDetailPageProps> = ({
                                                      </div>
                                                  </div>
                                                  <div className="flex items-center gap-3">
-                                                     <span className="text-sm font-bold text-gray-900 dark:text-white">{formatCurrency(apt.price)}</span>
+                                                     <span className="text-sm font-bold text-gray-900 dark:text-white">{formatCurrency(apt.price + (apt.inventoryTotal || 0))}</span>
                                                      {status && <span className={`px-2 py-1 rounded text-[10px] font-bold ${status.color}`}>{status.name}</span>}
                                                  </div>
                                              </div>

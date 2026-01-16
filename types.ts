@@ -54,6 +54,41 @@ export interface Appointment {
   bookingFeePaid: boolean; // NEW: If the reservation was paid
   bookingFeeAmount: number; // NEW: Amount of the reservation
   notes?: string; // New field: notes for the appointment
+  inventoryItems?: AppointmentInventorySale[]; // Items sold during the appointment
+  inventoryTotal?: number; // Total amount from inventory items
+}
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  description?: string;
+  costPrice: number;
+  salePrice: number;
+  stock: number;
+  minStock?: number;
+  purchaseDate?: string; // ISO date
+  category?: string;
+  createdAt: number;
+}
+
+export interface AppointmentInventorySale {
+  itemId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+export interface InventoryMovement {
+  id: string;
+  itemId: string;
+  type: 'sale' | 'purchase' | 'adjustment';
+  quantity: number; // Positive for purchase/adjustment up, negative for sale/adjustment down
+  date: string; // ISO Date
+  price?: number; // Price per unit (salePrice or costPrice depending on type)
+  appointmentId?: string; // If type is 'sale'
+  notes?: string;
+  createdAt: number;
 }
 
 // Analytics Types

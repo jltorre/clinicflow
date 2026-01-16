@@ -1,6 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
-import { Client, Appointment, ServiceType, ClientRetentionMetric, AppStatus, Staff, AppSettings } from '../types';
+import { Client, Appointment, ServiceType, ClientRetentionMetric, AppStatus, Staff, AppSettings, InventoryItem, InventoryMovement } from '../types';
+import { dataService } from '../services/dataService';
 import { 
   differenceInDays, addDays, format, isBefore, 
   endOfWeek, endOfMonth, endOfYear, isWithinInterval,
@@ -19,6 +20,7 @@ interface AnalyticsDashboardProps {
   services: ServiceType[];
   statuses: AppStatus[];
   staff: Staff[];
+  inventory: InventoryItem[];
   onViewClient: (clientId: string) => void;
 }
 
@@ -204,10 +206,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ clients,
   );
 };
 
-export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, appointments, services, statuses, staff, onViewClient }) => {
+export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, appointments, services, statuses, staff, inventory, onViewClient }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [period, setPeriod] = useState<'week' | 'month' | 'year' | 'all'>('month');
-    const [subTab, setSubTab] = useState<'general' | 'team' | 'clients'>('general');
+    const [subTab, setSubTab] = useState<'general' | 'team' | 'clients' | 'inventory'>('general');
     const [teamServiceFilter, setTeamServiceFilter] = useState('');
     const [clientSearch, setClientSearch] = useState('');
     const [teamSortConfig, setTeamSortConfig] = useState<SortConfig>(null);
@@ -268,16 +270,24 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
 
             if (isCancelled) return;
 
+            // Product Sales
+            const appointmentProductRevenue = apt.inventoryTotal || 0;
+            const appointmentProductCost = (apt.inventoryItems || []).reduce((acc, sale) => {
+                const item = inventory.find(i => i.id === sale.itemId);
+                return acc + (item ? item.costPrice * sale.quantity : 0);
+            }, 0);
+
             if (status?.isBillable) {
-                revenue += apt.price;
+                revenue += apt.price + appointmentProductRevenue;
+                cost += appointmentProductCost;
                 attendedClientIds.add(apt.clientId);
                 totalHours += apt.durationMinutes / 60;
             } else {
                 if (apt.bookingFeePaid) {
                     revenue += apt.bookingFeeAmount;
-                    pending += (apt.price - apt.bookingFeeAmount);
+                    pending += (apt.price - apt.bookingFeeAmount) + appointmentProductRevenue;
                 } else {
-                    pending += apt.price;
+                    pending += apt.price + appointmentProductRevenue;
                 }
             }
 
@@ -306,11 +316,166 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
                 const s = services.find(srv => srv.id === apt.serviceTypeId);
                 metrics[apt.serviceTypeId] = { name: s?.name || 'Unknown', revenue: 0, hours: 0 };
             }
-            metrics[apt.serviceTypeId].revenue += apt.price;
+            metrics[apt.serviceTypeId].revenue += apt.price + (apt.inventoryTotal || 0);
             metrics[apt.serviceTypeId].hours += (apt.durationMinutes / 60);
         });
         return Object.values(metrics).sort((a,b) => b.revenue - a.revenue);
     }, [filteredAppointments, services, statuses]);
+
+    const teamMetrics = useMemo(() => {
+        const metrics: Record<string, { id: string, name: string, count: number, hours: number, revenue: number, cost: number, profit: number }> = {};
+        
+        staff.forEach(s => {
+            metrics[s.id] = { id: s.id, name: s.name, count: 0, hours: 0, revenue: 0, cost: 0, profit: 0 };
+        });
+
+        filteredAppointments.forEach(apt => {
+            if (!apt.staffId || !metrics[apt.staffId]) return;
+            const status = statuses.find(s => s.id === apt.statusId);
+            if (!status?.isBillable) return;
+
+            const hours = apt.durationMinutes / 60;
+            const staffMember = staff.find(s => s.id === apt.staffId);
+            const hourlyRate = staffMember?.rates?.[apt.serviceTypeId] ?? staffMember?.defaultRate ?? 0;
+            
+            const appointmentProductRevenue = apt.inventoryTotal || 0;
+            const appointmentProductCost = (apt.inventoryItems || []).reduce((acc, sale) => {
+                const item = inventory.find(i => i.id === sale.itemId);
+                return acc + (item ? item.costPrice * sale.quantity : 0);
+            }, 0);
+
+            metrics[apt.staffId].count += 1;
+            metrics[apt.staffId].hours += hours;
+            metrics[apt.staffId].revenue += apt.price + appointmentProductRevenue;
+            metrics[apt.staffId].cost += (hours * hourlyRate) + appointmentProductCost;
+        });
+
+        return Object.values(metrics).map(m => ({
+            ...m,
+            profit: m.revenue - m.cost
+        })).sort((a, b) => {
+            if (!teamSortConfig) return b.profit - a.profit;
+            const { key, direction } = teamSortConfig;
+            const valA = (a as any)[key];
+            const valB = (b as any)[key];
+            return direction === 'asc' ? valA - valB : valB - valA;
+        });
+    }, [filteredAppointments, staff, statuses, inventory, teamSortConfig]);
+
+    const clientFinancials = useMemo(() => {
+        const financials: Record<string, { id: string, name: string, email: string, appointments: number, revenue: number, pending: number }> = {};
+        
+        clients.forEach(c => {
+            financials[c.id] = { id: c.id, name: c.name, email: c.email, appointments: 0, revenue: 0, pending: 0 };
+        });
+
+        filteredAppointments.forEach(apt => {
+            if (!financials[apt.clientId]) return;
+            const status = statuses.find(s => s.id === apt.statusId);
+            const isCancelled = status?.name.toLowerCase().includes('cancel') || status?.name.toLowerCase().includes('anul');
+            if (isCancelled) return;
+
+            financials[apt.clientId].appointments += 1;
+            
+            if (status?.isBillable) {
+                financials[apt.clientId].revenue += apt.price + (apt.inventoryTotal || 0);
+            } else {
+                if (apt.bookingFeePaid) {
+                    financials[apt.clientId].revenue += apt.bookingFeeAmount;
+                    financials[apt.clientId].pending += (apt.price - apt.bookingFeeAmount) + (apt.inventoryTotal || 0);
+                } else {
+                    financials[apt.clientId].pending += apt.price + (apt.inventoryTotal || 0);
+                }
+            }
+        });
+
+        return Object.values(financials)
+            .filter(c => {
+                const search = clientSearch.toLowerCase();
+                return c.name.toLowerCase().includes(search) || c.email.toLowerCase().includes(search);
+            })
+            .sort((a, b) => {
+                if (!clientFinancialsSortConfig) return b.revenue - a.revenue;
+                const { key, direction } = clientFinancialsSortConfig;
+                const valA = (a as any)[key];
+                const valB = (b as any)[key];
+                if (typeof valA === 'string') {
+                    return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                }
+                return direction === 'asc' ? valA - valB : valB - valA;
+            });
+    }, [filteredAppointments, clients, statuses, clientSearch, clientFinancialsSortConfig]);
+
+    const [allMovements, setAllMovements] = useState<InventoryMovement[]>([]);
+    
+    React.useEffect(() => {
+        const fetchMovements = async () => {
+            const uid = (window as any).currentUserUid || 'guest';
+            const data = await dataService.getInventoryMovements(uid);
+            setAllMovements(data);
+        };
+        fetchMovements();
+    }, [inventory]);
+
+    const inventoryFinancialMetrics = useMemo(() => {
+        const { start, end } = dateRange;
+        const periodMovements = allMovements.filter(m => {
+            if (!start || !end) return true;
+            return isWithinInterval(new Date(m.date), { start, end });
+        });
+
+        const totalStockValue = inventory.reduce((acc, item) => acc + (item.stock * item.costPrice), 0);
+        let purchaseInvestment = 0;
+        let salesRevenue = 0;
+        let cogs = 0; // Cost of Goods Sold
+
+        const productBreakdown: Record<string, { name: string, bought: number, sold: number, revenue: number, profit: number }> = {};
+        inventory.forEach(item => {
+            productBreakdown[item.id] = { name: item.name, bought: 0, sold: 0, revenue: 0, profit: 0 };
+        });
+
+        periodMovements.forEach(m => {
+            if (!productBreakdown[m.itemId]) return;
+            if (m.type === 'purchase') {
+                const amount = m.quantity * (m.price || 0);
+                purchaseInvestment += amount;
+                productBreakdown[m.itemId].bought += amount;
+            } else if (m.type === 'sale') {
+                const qty = Math.abs(m.quantity);
+                const rev = qty * (m.price || 0);
+                const item = inventory.find(i => i.id === m.itemId);
+                const cost = qty * (item?.costPrice || 0);
+                
+                salesRevenue += rev;
+                cogs += cost;
+                productBreakdown[m.itemId].sold += qty;
+                productBreakdown[m.itemId].revenue += rev;
+                productBreakdown[m.itemId].profit += (rev - cost);
+            }
+        });
+
+        return {
+            totalStockValue,
+            purchaseInvestment,
+            salesRevenue,
+            netProfit: salesRevenue - cogs,
+            breakdown: Object.values(productBreakdown).sort((a,b) => b.revenue - a.revenue)
+        };
+    }, [allMovements, inventory, dateRange]);
+
+    const requestTeamSort = (key: string) => {
+        setTeamSortConfig(prev => ({
+            key,
+            direction: prev?.key === key && prev?.direction === 'asc' ? 'desc' : 'asc'
+        }));
+    };
+
+    const requestClientSort = (key: string) => {
+        setClientFinancialsSortConfig(prev => ({
+            key,
+            direction: prev?.key === key && prev?.direction === 'asc' ? 'desc' : 'asc'
+        }));
+    };
 
     return (
         <div className="flex-1 overflow-y-auto">
@@ -375,6 +540,7 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
                     <button onClick={() => setSubTab('general')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${subTab === 'general' ? 'border-teal-600 text-teal-600 dark:text-teal-400' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-teal-600'}`}>General</button>
                     <button onClick={() => setSubTab('team')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${subTab === 'team' ? 'border-teal-600 text-teal-600 dark:text-teal-400' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-teal-600'}`}>Equipo</button>
                     <button onClick={() => setSubTab('clients')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${subTab === 'clients' ? 'border-teal-600 text-teal-600 dark:text-teal-400' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-teal-600'}`}>Clientes</button>
+                    <button onClick={() => setSubTab('inventory')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${subTab === 'inventory' ? 'border-teal-600 text-teal-600 dark:text-teal-400' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-teal-600'}`}>Inventario</button>
                 </div>
 
                 {subTab === 'general' && (
@@ -396,6 +562,185 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
                                     <Line yAxisId="right" type="monotone" dataKey="hours" name="Horas" stroke="#f59e0b" strokeWidth={3} dot={{ fill: '#f59e0b' }} />
                                 </ComposedChart>
                             </ResponsiveContainer>
+                        </div>
+                    </div>
+                )}
+
+                {subTab === 'team' && (
+                    <div className="space-y-6">
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 border border-gray-200 dark:border-gray-700">
+                            <h3 className="text-lg font-semibold mb-6 text-gray-900 dark:text-white">Rendimiento (Beneficio Neto)</h3>
+                            <div className="h-[350px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={teamMetrics}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.1} />
+                                        <XAxis dataKey="name" stroke="#9ca3af" tick={{fontSize: 12}} />
+                                        <YAxis stroke="#9ca3af" tick={{fontSize: 12}} />
+                                        <Tooltip 
+                                            contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#f3f4f6' }}
+                                            itemStyle={{ fontSize: '12px' }}
+                                        />
+                                        <Legend />
+                                        <Bar dataKey="profit" name="Beneficio Neto" fill="#0f766e" radius={[4, 4, 0, 0]} />
+                                        <Bar dataKey="cost" name="Coste Salarial" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                                        <Bar dataKey="revenue" name="Ingresos Generados" fill="#10b981" radius={[4, 4, 0, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                                <h3 className="font-semibold text-gray-900 dark:text-white">Detalle Numérico</h3>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm">
+                                    <thead>
+                                        <tr className="bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400">Miembro</th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-center">Citas</th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-center">Horas</th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-right">Ingresos</th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-right">Coste</th>
+                                            <th className="px-6 py-3 font-semibold text-teal-600 dark:text-teal-400 text-right">Beneficio</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                        {teamMetrics.map(m => (
+                                            <tr key={m.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                                <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{m.name}</td>
+                                                <td className="px-6 py-4 text-center text-gray-700 dark:text-gray-300">{m.count}</td>
+                                                <td className="px-6 py-4 text-center text-gray-700 dark:text-gray-300">{m.hours.toFixed(1)}h</td>
+                                                <td className="px-6 py-4 text-right font-medium text-gray-900 dark:text-white">{formatCurrency(m.revenue)}</td>
+                                                <td className="px-6 py-4 text-right text-red-500 font-medium">-{formatCurrency(m.cost)}</td>
+                                                <td className="px-6 py-4 text-right font-bold text-teal-600 dark:text-teal-400">{formatCurrency(m.profit)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {subTab === 'clients' && (
+                    <div className="space-y-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex flex-col md:flex-row justify-between items-center gap-4">
+                                <h3 className="font-semibold text-gray-900 dark:text-white">Desglose por Cliente</h3>
+                                <div className="relative w-full md:w-64">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar cliente, email o t..."
+                                        className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                                        value={clientSearch}
+                                        onChange={e => setClientSearch(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm">
+                                    <thead>
+                                        <tr className="bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 cursor-pointer hover:text-teal-600" onClick={() => requestClientSort('name')}>CLIENTE</th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-center cursor-pointer hover:text-teal-600" onClick={() => requestClientSort('appointments')}>CITAS</th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-right cursor-pointer hover:text-teal-600" onClick={() => requestClientSort('revenue')}>REALIZADO (COBRADO)</th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-right cursor-pointer hover:text-teal-600" onClick={() => requestClientSort('pending')}>FUTURO (PENDIENTE)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                        {clientFinancials.map(c => (
+                                            <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer" onClick={() => onViewClient(c.id)}>
+                                                <td className="px-6 py-4">
+                                                    <div className="font-medium text-gray-900 dark:text-white">{c.name}</div>
+                                                    <div className="text-xs text-gray-500">{c.email}</div>
+                                                </td>
+                                                <td className="px-6 py-4 text-center text-gray-700 dark:text-gray-300">{c.appointments}</td>
+                                                <td className="px-6 py-4 text-right font-bold text-teal-600 dark:text-teal-400">{formatCurrency(c.revenue)}</td>
+                                                <td className="px-6 py-4 text-right font-medium text-gray-600 dark:text-gray-400">{formatCurrency(c.pending)}</td>
+                                            </tr>
+                                        ))}
+                                        {clientFinancials.length === 0 && (
+                                            <tr>
+                                                <td colSpan={4} className="px-6 py-10 text-center text-gray-500 italic">No se han encontrado clientes en este periodo</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {subTab === 'inventory' && (
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                                <div className="text-xs text-gray-500 uppercase font-bold mb-1">Valor Stock (Costo)</div>
+                                <div className="text-xl font-bold text-gray-900 dark:text-white">{formatCurrency(inventoryFinancialMetrics.totalStockValue)}</div>
+                            </div>
+                            <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                                <div className="text-xs text-red-500 uppercase font-bold mb-1">Inversión Compras</div>
+                                <div className="text-xl font-bold text-gray-900 dark:text-white">{formatCurrency(inventoryFinancialMetrics.purchaseInvestment)}</div>
+                            </div>
+                            <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                                <div className="text-xs text-emerald-500 uppercase font-bold mb-1">Ingresos Ventas</div>
+                                <div className="text-xl font-bold text-gray-900 dark:text-white">{formatCurrency(inventoryFinancialMetrics.salesRevenue)}</div>
+                            </div>
+                            <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                                <div className="text-xs text-teal-500 uppercase font-bold mb-1">Beneficio Neto Prod.</div>
+                                <div className="text-xl font-bold text-teal-600 dark:text-teal-400">{formatCurrency(inventoryFinancialMetrics.netProfit)}</div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 border border-gray-200 dark:border-gray-700">
+                            <h3 className="text-lg font-semibold mb-6 text-gray-900 dark:text-white">Análisis de Movimientos</h3>
+                            <div className="h-[300px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={inventoryFinancialMetrics.breakdown.slice(0, 10)}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.1} />
+                                        <XAxis dataKey="name" stroke="#9ca3af" tick={{fontSize: 10}} />
+                                        <YAxis stroke="#9ca3af" tick={{fontSize: 10}} />
+                                        <Tooltip 
+                                            contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#f3f4f6' }}
+                                        />
+                                        <Legend />
+                                        <Bar dataKey="revenue" name="Ingresos por Ventas" fill="#0f766e" radius={[4, 4, 0, 0]} />
+                                        <Bar dataKey="profit" name="Beneficio Real" fill="#10b981" radius={[4, 4, 0, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                                <h3 className="font-semibold text-gray-900 dark:text-white">Rendimiento por Producto</h3>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm">
+                                    <thead>
+                                        <tr className="bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400">Producto</th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-center">Invertido</th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-center">Vendido (u.)</th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-right">Ingreso</th>
+                                            <th className="px-6 py-3 font-semibold text-teal-600 dark:text-teal-400 text-right">Beneficio</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                        {inventoryFinancialMetrics.breakdown.map((p, idx) => (
+                                            <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                                <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{p.name}</td>
+                                                <td className="px-6 py-4 text-center text-red-500">{formatCurrency(p.bought)}</td>
+                                                <td className="px-6 py-4 text-center text-gray-700 dark:text-gray-300">{p.sold}</td>
+                                                <td className="px-6 py-4 text-right font-medium text-gray-900 dark:text-white">{formatCurrency(p.revenue)}</td>
+                                                <td className="px-6 py-4 text-right font-bold text-teal-600 dark:text-teal-400">{formatCurrency(p.profit)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 )}

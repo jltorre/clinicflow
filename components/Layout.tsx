@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Users, Briefcase, TrendingUp, DollarSign, Moon, Sun, Settings, BadgeCheck, Menu, LogOut } from 'lucide-react';
+import { Calendar, Users, Briefcase, TrendingUp, DollarSign, Moon, Sun, Settings, BadgeCheck, Menu, LogOut, Box } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -40,6 +40,7 @@ export const Layout: React.FC<LayoutProps> = ({
               { id: 'clients', label: 'Clientes', icon: Users },
               { id: 'services', label: 'Tratamientos', icon: Briefcase },
               { id: 'staff', label: 'Equipo', icon: BadgeCheck },
+              { id: 'inventory', label: 'Inventario', icon: Box },
           ]
       },
       {
@@ -61,7 +62,7 @@ export const Layout: React.FC<LayoutProps> = ({
   const mobileItems = [
       { id: 'calendar', label: 'Agenda', icon: Calendar },
       { id: 'clients', label: 'Clientes', icon: Users },
-      { id: 'financial', label: 'Finanzas', icon: DollarSign },
+      { id: 'inventory', label: 'Inventario', icon: Box },
       { id: 'settings', label: 'Ajustes', icon: Settings },
   ];
 

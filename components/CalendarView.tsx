@@ -298,7 +298,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         return [
             apt.id, format(new Date(apt.date), 'yyyy-MM-dd'), apt.startTime, apt.durationMinutes,
             `"${getClientName(apt.clientId)}"`, `"${service?.name || ''}"`, `"${s?.name || ''}"`,
-            `"${formatCurrency(apt.price)}"`, st?.name || '', `"${apt.notes || ''}"`
+            `"${formatCurrency(apt.price + (apt.inventoryTotal || 0))}"`, st?.name || '', `"${apt.notes || ''}"`
         ].join(',');
     });
     const csvContent = "\uFEFF" + [headers.join(','), ...rows].join('\n'); 
@@ -395,7 +395,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white font-medium"><button onClick={() => onViewClient(apt.clientId)} className="hover:underline hover:text-teal-600">{apt.clientName}</button></td>
                                     <td className="px-6 py-4 whitespace-nowrap"><span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${bgClass} ${textClass}`}>{apt.serviceName}</span></td>
                                     <td className="px-6 py-4 whitespace-nowrap">{staffMember ? (<div className="flex items-center"><div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-2 ${staffMember.color}`}>{staffMember.name.charAt(0)}</div><span className="text-sm text-gray-700 dark:text-gray-300">{apt.staffName}</span></div>) : <span className="text-sm text-gray-500 dark:text-gray-400">-</span>}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{formatCurrency(apt.price)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{formatCurrency(apt.price + (apt.inventoryTotal || 0))}</td>
                                     <td className="px-6 py-4 whitespace-nowrap"><span className={`px-2 py-1 rounded text-xs font-medium ${status?.color || 'bg-gray-100 text-gray-700'}`}>{apt.statusName}</span></td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><div className="flex items-center justify-end space-x-3">{!status?.isBillable && onQuickComplete && (<button onClick={(e) => { e.stopPropagation(); onQuickComplete(apt); }} className="text-gray-500 hover:text-emerald-500 transition-colors" title="Marcar como Realizada"><CheckCircle className="w-5 h-5" /></button>)}<button onClick={() => onEditAppointment(apt)} className="text-teal-600 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-200">Editar</button></div></td>
                                 </tr>

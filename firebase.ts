@@ -5,12 +5,12 @@ import "firebase/compat/auth";
 import "firebase/compat/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAXjPgIx-av7fhhco1583xJQ5gYPKAxAf0",
-  authDomain: "clinicflow-368d2.firebaseapp.com",
-  projectId: "clinicflow-368d2",
-  storageBucket: "clinicflow-368d2.firebasestorage.app",
-  messagingSenderId: "327127338870",
-  appId: "1:327127338870:web:47483c1a86a2a42077f457"
+  apiKey: "AIzaSyCISc3FmfSp9o78f0ZbzCFJ7AzzICLaT2A",
+  authDomain: "clinicflow-4dcf9.firebaseapp.com",
+  projectId: "clinicflow-4dcf9",
+storageBucket: "clinicflow-4dcf9.firebasestorage.app",
+messagingSenderId: "363022932649",
+appId: "1:363022932649:web:c50dc078133851820b27b8"
 };
 
 if (!firebase.apps.length) {

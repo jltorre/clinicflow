@@ -5,7 +5,7 @@ import 'firebase/compat/auth';
 import { auth } from './firebase';
 import { Layout } from './components/Layout';
 import { CalendarView } from './components/CalendarView';
-import { ClientList, ServiceList, StaffList } from './components/ManagementViews';
+import { ClientList, ServiceList, StaffList, InventoryList, InventoryMovementDetailPage } from './components/ManagementViews';
 import { AnalyticsDashboard, FinancialReport } from './components/AnalyticsDashboard';
 import { LoginView } from './components/LoginView';
 import { SettingsView } from './components/SettingsView';
@@ -15,8 +15,8 @@ import { ClientDetailPage } from './components/ClientDetailPage';
 import { ServiceDetailPage } from './components/ServiceDetailPage'; 
 import { StaffDetailPage } from './components/StaffDetailPage';
 import { dataService } from './services/dataService';
-import { Client, ServiceType, Appointment, AppStatus, Staff, UserProfile, AppSettings } from './types';
-import { X, Check, Copy, ArrowRight, Trash, LogOut, Mail, Phone, Calendar as CalendarIcon, Move, Edit2, EyeOff, Eye, Lightbulb, Plus, AlertTriangle, Wallet, CheckCircle, Info, AlertCircle } from 'lucide-react';
+import { Client, ServiceType, Appointment, AppStatus, Staff, UserProfile, AppSettings, InventoryItem, AppointmentInventorySale, InventoryMovement } from './types';
+import { X, Check, Copy, ArrowRight, Trash, LogOut, Mail, Phone, Calendar as CalendarIcon, Move, Edit2, EyeOff, Eye, Lightbulb, Plus, AlertTriangle, Wallet, CheckCircle, Info, AlertCircle, Box, ShoppingCart } from 'lucide-react';
 import { format, addDays, isFuture, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -128,12 +128,14 @@ const App: React.FC = () => {
   const [isGuest, setIsGuest] = useState(false);
   const [activeTab, setActiveTab] = useState('calendar');
   const [previousTab, setPreviousTab] = useState('clients');
+  const [inventoryYear, setInventoryYear] = useState(new Date().getFullYear());
   
   const [clients, setClients] = useState<Client[]>([]);
   const [services, setServices] = useState<ServiceType[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [statuses, setStatuses] = useState<AppStatus[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [settings, setSettings] = useState<AppSettings>({ currency: 'EUR', defaultBookingFee: 20 });
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
@@ -202,18 +204,20 @@ const App: React.FC = () => {
 
       const loadData = async () => {
         try {
-            const [c, s, a, st, sf] = await Promise.all([
+            const [c, s, a, st, sf, inv] = await Promise.all([
                 dataService.getClients(uid),
                 dataService.getServices(uid),
                 dataService.getAppointments(uid),
                 dataService.getStatuses(uid),
-                dataService.getStaff(uid)
+                dataService.getStaff(uid),
+                dataService.getInventory(uid)
             ]);
             setClients(c);
             setServices(s);
             setAppointments(a);
             setStatuses(st);
             setStaff(sf);
+            setInventory(inv);
             
             const savedSettings = localStorage.getItem(`settings-${uid}`);
             if (savedSettings) setSettings(JSON.parse(savedSettings));
@@ -248,9 +252,12 @@ const App: React.FC = () => {
   const [editingService, setEditingService] = useState<ServiceType | null>(null);
   const [isStaffModalOpen, setStaffModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
+  const [isInventoryModalOpen, setInventoryModalOpen] = useState(false);
+  const [editingInventory, setEditingInventory] = useState<InventoryItem | null>(null);
   const [selectedClientIdForDetailView, setSelectedClientIdForDetailView] = useState<string | null>(null);
   const [selectedServiceIdForDetailView, setSelectedServiceIdForDetailView] = useState<string | null>(null);
   const [selectedStaffIdForDetailView, setSelectedStaffIdForDetailView] = useState<string | null>(null);
+  const [selectedInventoryItemIdForDetailView, setSelectedInventoryItemIdForDetailView] = useState<string | null>(null);
   const [moveRequest, setMoveRequest] = useState<{ apt: Appointment, date: Date, time: string } | null>(null);
   const [confirmModalProps, setConfirmModalProps] = useState({
     isOpen: false,
@@ -263,6 +270,7 @@ const App: React.FC = () => {
   const [clientForm, setClientForm] = useState<Partial<Client>>({});
   const [serviceForm, setServiceForm] = useState<Partial<ServiceType>>({});
   const [staffForm, setStaffForm] = useState<Partial<Staff>>({});
+  const [inventoryForm, setInventoryForm] = useState<Partial<InventoryItem>>({});
   
   const [pendingAppointmentContext, setPendingAppointmentContext] = useState<PendingAppointmentContext | null>(null);
 
@@ -281,6 +289,7 @@ const App: React.FC = () => {
       setSelectedClientIdForDetailView(null);
       setSelectedServiceIdForDetailView(null);
       setSelectedStaffIdForDetailView(null);
+      setSelectedInventoryItemIdForDetailView(null);
       setActiveTab(previousTab);
   };
   
@@ -294,6 +303,12 @@ const App: React.FC = () => {
       setPreviousTab(activeTab);
       setSelectedStaffIdForDetailView(id);
       setActiveTab('staff-detail');
+  };
+
+  const handleViewInventoryHistory = (id: string) => {
+      setPreviousTab(activeTab);
+      setSelectedInventoryItemIdForDetailView(id);
+      setActiveTab('inventory-detail');
   };
   
   const handleScheduleFromDetail = (context: PendingAppointmentContext) => {
@@ -365,16 +380,63 @@ const App: React.FC = () => {
       const newBasePrice = selectedService?.defaultPrice || 0;
       const newDiscountPercentage = selectedClient?.discountPercentage || 0;
       const newFinalPrice = calculateFinalPrice(newBasePrice, newDiscountPercentage);
+      const newInventoryTotal = (aptForm.inventoryItems || []).reduce((acc, item) => acc + item.totalPrice, 0);
 
       setAptForm(prev => ({
         ...prev,
         basePrice: newBasePrice,
         discountPercentage: newDiscountPercentage,
         price: newFinalPrice,
-        durationMinutes: selectedService?.defaultDuration || 60
+        durationMinutes: selectedService?.defaultDuration || 60,
+        inventoryTotal: newInventoryTotal
       }));
     }
-  }, [aptForm.clientId, aptForm.serviceTypeId, isAptModalOpen, services, clients, editingApt]);
+  }, [aptForm.clientId, aptForm.serviceTypeId, isAptModalOpen, services, clients, editingApt, aptForm.inventoryItems]);
+
+  const handleAddInventoryToApt = (itemId: string) => {
+      const item = inventory.find(i => i.id === itemId);
+      if (!item) return;
+      if (item.stock <= 0) {
+          addToast("No hay stock disponible", "error");
+          return;
+      }
+      const existing = (aptForm.inventoryItems || []).find(i => i.itemId === itemId);
+      let updated;
+      if (existing) {
+          if (existing.quantity >= item.stock) {
+              addToast("No hay más stock disponible", "error");
+              return;
+          }
+          updated = aptForm.inventoryItems!.map(i => i.itemId === itemId ? { ...i, quantity: i.quantity + 1, totalPrice: (i.quantity + 1) * i.unitPrice } : i);
+      } else {
+          updated = [...(aptForm.inventoryItems || []), { itemId, name: item.name, quantity: 1, unitPrice: item.salePrice, totalPrice: item.salePrice }];
+      }
+      const newTotal = updated.reduce((acc, i) => acc + i.totalPrice, 0);
+      setAptForm({ ...aptForm, inventoryItems: updated, inventoryTotal: newTotal });
+  };
+
+  const handleRemoveInventoryFromApt = (itemId: string) => {
+      const updated = (aptForm.inventoryItems || []).map(i => {
+          if (i.itemId === itemId) {
+              if (i.quantity > 1) return { ...i, quantity: i.quantity - 1, totalPrice: (i.quantity - 1) * i.unitPrice };
+              return null;
+          }
+          return i;
+      }).filter(Boolean) as AppointmentInventorySale[];
+      const newTotal = updated.reduce((acc, i) => acc + i.totalPrice, 0);
+      setAptForm({ ...aptForm, inventoryItems: updated, inventoryTotal: newTotal });
+  };
+
+  const handleUpdateInventoryItemPrice = (itemId: string, newPrice: number) => {
+    const updated = (aptForm.inventoryItems || []).map(i => {
+        if (i.itemId === itemId) {
+            return { ...i, unitPrice: newPrice, totalPrice: i.quantity * newPrice };
+        }
+        return i;
+    });
+    const newTotal = updated.reduce((acc, i) => acc + i.totalPrice, 0);
+    setAptForm({ ...aptForm, inventoryItems: updated, inventoryTotal: newTotal });
+  };
 
 
   const handleSaveApt = async (e: React.FormEvent) => {
@@ -399,8 +461,49 @@ const App: React.FC = () => {
       price: Number(aptForm.price) || 0,
       bookingFeePaid: aptForm.bookingFeePaid || false,
       bookingFeeAmount: Number(aptForm.bookingFeeAmount) || 0,
-      notes: aptForm.notes || ''
+      notes: aptForm.notes || '',
+      inventoryItems: aptForm.inventoryItems || [],
+      inventoryTotal: aptForm.inventoryTotal || 0
     }, uid);
+
+    // Stock Management Logic
+    const oldApt = editingApt;
+    const newItems = aptForm.inventoryItems || [];
+    const oldItems = oldApt?.inventoryItems || [];
+
+    // Combine all unique item IDs
+    const allItemIds = Array.from(new Set([...newItems.map(i => i.itemId), ...oldItems.map(i => i.itemId)]));
+
+    for (const itemId of allItemIds) {
+        const newItem = newItems.find(i => i.itemId === itemId);
+        const oldItem = oldItems.find(i => i.itemId === itemId);
+        const diff = (newItem?.quantity || 0) - (oldItem?.quantity || 0);
+
+        if (diff !== 0) {
+            const invItem = inventory.find(i => i.id === itemId);
+            if (invItem) {
+                const updatedInvItem = { ...invItem, stock: invItem.stock - diff };
+                await dataService.saveInventoryItem(updatedInvItem, uid);
+                
+                // Record movement
+                await dataService.saveInventoryMovement({
+                    id: '',
+                    itemId,
+                    type: diff > 0 ? 'sale' : 'adjustment',
+                    quantity: -diff,
+                    date: aptForm.date || new Date().toISOString(),
+                    price: newItem?.unitPrice || oldItem?.unitPrice || invItem.salePrice,
+                    appointmentId: saved.id,
+                    notes: diff > 0 ? `Venta en cita ${saved.id}` : `Ajuste por edición de cita ${saved.id}`,
+                    createdAt: Date.now()
+                }, uid);
+
+                // Update local inventory state
+                setInventory(prev => prev.map(i => i.id === itemId ? updatedInvItem : i));
+            }
+        }
+    }
+
     if (editingApt) setAppointments(appointments.map(a => a.id === saved.id ? saved : a));
     else setAppointments([...appointments, saved]);
     setAptModalOpen(false);
@@ -436,6 +539,33 @@ const App: React.FC = () => {
           title: "¿Eliminar Cita?",
           message: "¿Estás seguro de que quieres borrar esta cita permanentemente?",
           onConfirm: async () => {
+             // Replenish stock before deleting
+             const items = editingApt.inventoryItems || [];
+              if (items.length > 0) {
+                  for (const item of items) {
+                      const invItem = inventory.find(i => i.id === item.itemId);
+                      if (invItem) {
+                          const updated = { ...invItem, stock: invItem.stock + item.quantity };
+                          await dataService.saveInventoryItem(updated, uid);
+                          
+                          // Record movement reversal
+                          await dataService.saveInventoryMovement({
+                              id: '',
+                              itemId: item.itemId,
+                              type: 'adjustment',
+                              quantity: item.quantity,
+                              date: new Date().toISOString(),
+                              price: item.unitPrice,
+                              appointmentId: editingApt.id,
+                              notes: `Devolución por eliminación de cita ${editingApt.id}`,
+                              createdAt: Date.now()
+                          }, uid);
+
+                          setInventory(prev => prev.map(i => i.id === item.itemId ? updated : i));
+                      }
+                  }
+              }
+
             await dataService.deleteAppointment(editingApt.id, uid); 
             setAppointments(appointments.filter(a => a.id !== editingApt.id)); 
             setAptModalOpen(false);
@@ -589,6 +719,87 @@ const App: React.FC = () => {
     });
   };
 
+  const handleSaveInventory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const uid = getUid();
+    if (!uid || !inventoryForm.name) return;
+    const saved = await dataService.saveInventoryItem({
+        ...inventoryForm,
+        id: editingInventory?.id || '',
+        createdAt: editingInventory?.createdAt || Date.now(),
+        costPrice: Number(inventoryForm.costPrice) || 0,
+        salePrice: Number(inventoryForm.salePrice) || 0,
+        stock: Number(inventoryForm.stock) || 0
+    } as InventoryItem, uid);
+    if (editingInventory) setInventory(inventory.map(i => i.id === saved.id ? saved : i));
+    else setInventory([...inventory, saved]);
+    setInventoryModalOpen(false);
+    addToast("Producto de inventario guardado");
+  };
+
+  const handleDeleteInventoryRequest = (item: InventoryItem) => {
+    setConfirmModalProps({
+        isOpen: true,
+        title: 'Eliminar Producto',
+        message: `¿Estás seguro de que quieres eliminar "${item.name}" del inventario?`,
+        onConfirm: async () => {
+            const uid = getUid(); if(!uid) return;
+            await dataService.deleteInventoryItem(item.id, uid);
+            setInventory(inventory.filter(i => i.id !== item.id));
+            addToast("Producto eliminado", "info");
+        },
+    });
+  };
+
+  const handleDeleteMovement = async (movement: InventoryMovement) => {
+      const uid = getUid(); if(!uid) return;
+      const item = inventory.find(i => i.id === movement.itemId);
+      if (!item) return;
+
+      setConfirmModalProps({
+          isOpen: true,
+          title: 'Eliminar Movimiento',
+          message: `¿Estás seguro de que quieres eliminar este movimiento? El stock se ajustará automáticamente.`,
+          onConfirm: async () => {
+              await dataService.deleteInventoryMovement(movement.id, uid);
+              
+              // Adjust stock
+              let newStock = item.stock;
+              if (movement.type === 'purchase') {
+                  newStock -= movement.quantity;
+              } else if (movement.type === 'sale' || (movement.type === 'adjustment' && movement.quantity < 0)) {
+                  // If we delete a sale (stock out), stock goes back up
+                  newStock += Math.abs(movement.quantity);
+              }
+
+              const updatedItem = { ...item, stock: newStock };
+              await dataService.saveInventoryItem(updatedItem, uid);
+              setInventory(inventory.map(i => i.id === item.id ? updatedItem : i));
+              addToast("Movimiento eliminado y stock ajustado");
+              return true; // Used by child to refresh list
+          }
+      });
+  };
+
+  const handleSaveMovement = async (movement: InventoryMovement, oldQuantity: number) => {
+      const uid = getUid(); if(!uid) return;
+      const item = inventory.find(i => i.id === movement.itemId);
+      if (!item) return;
+
+      const saved = await dataService.saveInventoryMovement(movement, uid);
+      
+      // Adjust stock based on difference
+      if (movement.type === 'purchase') {
+          const diff = movement.quantity - oldQuantity;
+          const updatedItem = { ...item, stock: item.stock + diff };
+          await dataService.saveInventoryItem(updatedItem, uid);
+          setInventory(inventory.map(i => i.id === item.id ? updatedItem : i));
+      }
+
+      addToast("Movimiento actualizado");
+      return saved;
+  };
+
   const handleSaveSettings = (newSettings: AppSettings) => {
       const uid = getUid();
       if (!uid) return;
@@ -711,8 +922,31 @@ const App: React.FC = () => {
                 onOpenAptModal={handleOpenAptModal}
             />
         )}
-        {activeTab === 'analytics' && <AnalyticsDashboard clients={clients} appointments={appointments} services={services} statuses={statuses} staff={staff} onViewClient={handleViewClient} />}
-        {activeTab === 'financial' && <FinancialReport clients={clients} appointments={appointments} services={services} statuses={statuses} staff={staff} onViewClient={handleViewClient} />}
+        { activeTab === 'inventory' && (
+            <InventoryList 
+                inventory={inventory} 
+                appointments={appointments} 
+                year={inventoryYear}
+                onYearChange={setInventoryYear}
+                onAdd={() => {setEditingInventory(null); setInventoryForm({stock: 0, costPrice: 0, salePrice: 0}); setInventoryModalOpen(true)}} 
+                onEdit={(item) => {setEditingInventory(item); setInventoryForm(item); setInventoryModalOpen(true)}} 
+                onUpdate={(item) => setInventory(inventory.map(i => i.id === item.id ? item : i))}
+                onViewHistory={(item) => handleViewInventoryHistory(item.id)}
+                onDeleteRequest={handleDeleteInventoryRequest}
+            />
+        )}
+        {activeTab === 'inventory-detail' && selectedInventoryItemIdForDetailView && (
+            <InventoryMovementDetailPage
+                item={inventory.find(i => i.id === selectedInventoryItemIdForDetailView)!}
+                onBack={handleBackFromDetail}
+                onDeleteMovement={handleDeleteMovement}
+                onSaveMovement={handleSaveMovement}
+                formatCurrency={formatCurrency}
+                initialYear={inventoryYear}
+            />
+        )}
+        {activeTab === 'analytics' && <AnalyticsDashboard clients={clients} appointments={appointments} services={services} statuses={statuses} staff={staff} inventory={inventory} onViewClient={handleViewClient} />}
+        {activeTab === 'financial' && <FinancialReport clients={clients} appointments={appointments} services={services} statuses={statuses} staff={staff} inventory={inventory} onViewClient={handleViewClient} />}
         {activeTab === 'settings' && <SettingsView statuses={statuses} settings={settings} onSaveSettings={handleSaveSettings} onSaveStatus={handleSaveStatus} onDeleteStatus={handleDeleteStatus} onRestartTour={handleRestartTour} />}
 
         <OnboardingTour isOpen={showTour} onClose={handleTourClose} />
@@ -805,6 +1039,67 @@ const App: React.FC = () => {
                     </div>
                 </div>
 
+                {/* Inventory Items Section */}
+                <div className="border-t border-gray-100 dark:border-gray-700 pt-4 mt-2">
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                        <Box className="w-4 h-4" /> Venta de Productos (Opcional)
+                    </label>
+                    
+                    <div className="space-y-3">
+                        <select 
+                            className={inputClass}
+                            onChange={e => {
+                                if (e.target.value) {
+                                    handleAddInventoryToApt(e.target.value);
+                                    e.target.value = '';
+                                }
+                            }}
+                            value=""
+                        >
+                            <option value="">Añadir producto...</option>
+                            {inventory.map(item => (
+                                <option key={item.id} value={item.id} disabled={item.stock <= 0}>
+                                    {item.name} ({item.stock} disponibles) - {formatCurrency(item.salePrice)}
+                                </option>
+                            ))}
+                        </select>
+
+                        {aptForm.inventoryItems && aptForm.inventoryItems.length > 0 && (
+                            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 space-y-2">
+                                {aptForm.inventoryItems.map(item => (
+                                    <div key={item.itemId} className="flex items-center justify-between text-sm">
+                                        <div className="flex-1">
+                                            <div className="font-medium text-gray-900 dark:text-white">{item.name}</div>
+                                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                                                <span>{item.quantity} x </span>
+                                                <input 
+                                                    type="number" 
+                                                    className="w-16 p-0.5 bg-transparent border-b border-gray-300 dark:border-gray-600 focus:border-teal-500 outline-none"
+                                                    value={item.unitPrice}
+                                                    onChange={(e) => handleUpdateInventoryItemPrice(item.itemId, Number(e.target.value))}
+                                                />
+                                                <span>€</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="font-bold text-gray-900 dark:text-white">{formatCurrency(item.totalPrice)}</div>
+                                            <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded overflow-hidden bg-white dark:bg-gray-700">
+                                                <button type="button" onClick={() => handleRemoveInventoryFromApt(item.itemId)} className="px-2 py-0.5 hover:bg-gray-100 dark:hover:bg-gray-600">-</button>
+                                                <span className="px-2 py-0.5 text-xs border-x border-gray-300 dark:border-gray-600">{item.quantity}</span>
+                                                <button type="button" onClick={() => handleAddInventoryToApt(item.itemId)} className="px-2 py-0.5 hover:bg-gray-100 dark:hover:bg-gray-600">+</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                <div className="pt-2 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center text-sm font-bold">
+                                    <span>Total Productos</span>
+                                    <span>{formatCurrency(aptForm.inventoryTotal || 0)}</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
                 {/* Booking Fee Section */}
                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
                     <label className="flex items-center space-x-2 cursor-pointer">
@@ -845,7 +1140,7 @@ const App: React.FC = () => {
                     )}
                     <div className="flex justify-between text-base font-bold text-gray-900 dark:text-white border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
                         <span>Total a Cobrar:</span>
-                        <span>{formatCurrency((aptForm.price || 0) - (aptForm.bookingFeePaid ? (aptForm.bookingFeeAmount || 0) : 0))}</span>
+                        <span>{formatCurrency((aptForm.price || 0) + (aptForm.inventoryTotal || 0) - (aptForm.bookingFeePaid ? (aptForm.bookingFeeAmount || 0) : 0))}</span>
                     </div>
                 </div>
 
@@ -924,8 +1219,24 @@ const App: React.FC = () => {
                 <button type="submit" className="w-full bg-teal-600 text-white p-2 rounded">Guardar</button>
             </form>
         </Modal>
+        
+        <Modal isOpen={isInventoryModalOpen} onClose={() => setInventoryModalOpen(false)} title={editingInventory ? "Editar Producto" : "Nuevo Producto"}>
+            <form onSubmit={handleSaveInventory} className="space-y-4">
+                <div><label className={labelClass}>Nombre del Producto</label><input type="text" required className={inputClass} value={inventoryForm.name || ''} onChange={e => setInventoryForm({...inventoryForm, name: e.target.value})} placeholder="Ej. Crema Hidratante" /></div>
+                <div><label className={labelClass}>Categoría</label><input type="text" className={inputClass} value={inventoryForm.category || ''} onChange={e => setInventoryForm({...inventoryForm, category: e.target.value})} placeholder="Ej. Facial, Corporal..." /></div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div><label className={labelClass}>Costo (€)</label><input type="number" step="0.01" className={inputClass} value={inventoryForm.costPrice || ''} onChange={e => setInventoryForm({...inventoryForm, costPrice: Number(e.target.value)})} /></div>
+                    <div><label className={labelClass}>Precio Venta (€)</label><input type="number" step="0.01" className={inputClass} value={inventoryForm.salePrice || ''} onChange={e => setInventoryForm({...inventoryForm, salePrice: Number(e.target.value)})} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div><label className={labelClass}>Stock Actual</label><input type="number" required className={inputClass} value={inventoryForm.stock ?? ''} onChange={e => setInventoryForm({...inventoryForm, stock: Number(e.target.value)})} /></div>
+                    <div><label className={labelClass}>Stock Mínimo</label><input type="number" className={inputClass} value={inventoryForm.minStock || ''} onChange={e => setInventoryForm({...inventoryForm, minStock: Number(e.target.value)})} /></div>
+                </div>
+                <div><label className={labelClass}>Descripción</label><textarea className={`${inputClass} h-20`} value={inventoryForm.description || ''} onChange={e => setInventoryForm({...inventoryForm, description: e.target.value})} placeholder="Detalles del producto..." /></div>
+                <button type="submit" className="w-full bg-teal-600 text-white p-3 rounded-lg font-bold shadow-lg hover:bg-teal-700 transition-colors mt-2">Guardar Producto</button>
+            </form>
+        </Modal>
 
-        <MoveCopyModal isOpen={!!moveRequest} onClose={() => setMoveRequest(null)} onMove={executeMove} onCopy={executeCopy} />
     </Layout>
   );
 };

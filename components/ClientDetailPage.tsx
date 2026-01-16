@@ -84,7 +84,7 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
             if (!status) return;
 
             if (status.isBillable) {
-                totalSpent += apt.price;
+                totalSpent += apt.price + (apt.inventoryTotal || 0);
                 completedCount++;
                 // Check for last visit (assuming sorted desc)
                 if (!lastVisitDate) lastVisitDate = new Date(apt.date);
@@ -112,7 +112,7 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
                 apt.serviceTypeId === serviceId && isBillable(apt.statusId, statuses)
             );
 
-            const revenue = billableAptsForService.reduce((sum, apt) => sum + apt.price, 0);
+            const revenue = billableAptsForService.reduce((sum, apt) => sum + apt.price + (apt.inventoryTotal || 0), 0);
             
             return {
                 serviceId,
@@ -322,7 +322,7 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
                                                 </div>
                                                 <div className="flex items-center justify-between sm:justify-end gap-3 mt-2 sm:mt-0 pl-16 sm:pl-0">
                                                     <div className="text-right">
-                                                        <span className="block text-sm font-bold text-gray-900 dark:text-white">{formatCurrency(apt.price)}</span>
+                                                        <span className="block text-sm font-bold text-gray-900 dark:text-white">{formatCurrency(apt.price + (apt.inventoryTotal || 0))}</span>
                                                     </div>
                                                     {status && (
                                                         <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${status.color}`}>

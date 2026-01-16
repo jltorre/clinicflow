@@ -1,4 +1,4 @@
-import { Client, ServiceType, Appointment, AppStatus, Staff, UserProfile } from '../types';
+import { Client, ServiceType, Appointment, AppStatus, Staff, UserProfile, InventoryItem, InventoryMovement } from '../types';
 import { db } from '../firebase';
 import { MOCK_CLIENTS, MOCK_SERVICES, MOCK_STATUSES, MOCK_STAFF, MOCK_APPOINTMENTS } from './mockData';
 // FIX: Switched to Firebase v8 syntax.
@@ -12,7 +12,9 @@ const COLLECTIONS = {
   APPOINTMENTS: 'appointments',
   STATUSES: 'statuses',
   STAFF: 'staff',
-  USERS: 'users'
+  USERS: 'users',
+  INVENTORY: 'inventory',
+  INVENTORY_MOVEMENTS: 'inventory_movements'
 };
 
 // Initialize In-Memory Data with robust static data
@@ -21,6 +23,8 @@ let mockServices: ServiceType[] = [...MOCK_SERVICES];
 let mockStatuses: AppStatus[] = [...MOCK_STATUSES];
 let mockStaff: Staff[] = [...MOCK_STAFF];
 let mockAppointments: Appointment[] = [...MOCK_APPOINTMENTS];
+let mockInventory: InventoryItem[] = [];
+let mockMovements: InventoryMovement[] = [];
 
 export const dataService = {
   // User Profile
@@ -257,5 +261,93 @@ export const dataService = {
         return Promise.resolve();
     }
     await db.collection(COLLECTIONS.APPOINTMENTS).doc(id).delete();
+  },
+
+  // Inventory
+  getInventory: async (userId: string): Promise<InventoryItem[]> => {
+    if (!userId) return [];
+    if (userId === 'guest') return Promise.resolve([...mockInventory]);
+    try {
+      const querySnapshot = await db.collection(COLLECTIONS.INVENTORY).where("userId", "==", userId).get();
+      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
+    } catch (e) { console.error(e); return []; }
+  },
+
+  saveInventoryItem: async (item: InventoryItem, userId: string): Promise<InventoryItem> => {
+    if (userId === 'guest') {
+        if (!item.id) {
+            const newItem = { ...item, id: `inv-${Date.now()}` };
+            mockInventory.push(newItem);
+            return Promise.resolve(newItem);
+        } else {
+            mockInventory = mockInventory.map(i => i.id === item.id ? item : i);
+            return Promise.resolve(item);
+        }
+    }
+    if (!item.id) {
+        const { id, ...data } = item;
+        const docRef = await db.collection(COLLECTIONS.INVENTORY).add({ ...data, userId });
+        return { ...item, id: docRef.id };
+    } else {
+        const ref = db.collection(COLLECTIONS.INVENTORY).doc(item.id);
+        const { id, ...data } = item;
+        await ref.update(data);
+        return item;
+    }
+  },
+
+  deleteInventoryItem: async (id: string, userId?: string): Promise<void> => {
+    if (id.startsWith('inv-') || userId === 'guest') {
+        mockInventory = mockInventory.filter(i => i.id !== id);
+        return Promise.resolve();
+    }
+    await db.collection(COLLECTIONS.INVENTORY).doc(id).delete();
+  },
+
+  // Inventory Movements
+  getInventoryMovements: async (userId: string, itemId?: string): Promise<InventoryMovement[]> => {
+    if (!userId) return [];
+    if (userId === 'guest') {
+      let result = [...mockMovements];
+      if (itemId) result = result.filter(m => m.itemId === itemId);
+      return Promise.resolve(result.sort((a,b) => b.createdAt - a.createdAt));
+    }
+    try {
+      let query = db.collection(COLLECTIONS.INVENTORY_MOVEMENTS).where("userId", "==", userId);
+      if (itemId) query = query.where("itemId", "==", itemId);
+      const querySnapshot = await query.get();
+      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryMovement)).sort((a,b) => b.createdAt - a.createdAt);
+    } catch (e) { console.error(e); return []; }
+  },
+
+  saveInventoryMovement: async (movement: InventoryMovement, userId: string): Promise<InventoryMovement> => {
+    if (userId === 'guest') {
+        if (!movement.id) {
+            const newM = { ...movement, id: `mov-${Date.now()}` };
+            mockMovements.push(newM);
+            return Promise.resolve(newM);
+        } else {
+            mockMovements = mockMovements.map(m => m.id === movement.id ? movement : m);
+            return Promise.resolve(movement);
+        }
+    }
+    if (!movement.id) {
+        const { id, ...data } = movement;
+        const docRef = await db.collection(COLLECTIONS.INVENTORY_MOVEMENTS).add({ ...data, userId });
+        return { ...movement, id: docRef.id };
+    } else {
+        const ref = db.collection(COLLECTIONS.INVENTORY_MOVEMENTS).doc(movement.id);
+        const { id, ...data } = movement;
+        await ref.update(data);
+        return movement;
+    }
+  },
+
+  deleteInventoryMovement: async (id: string, userId?: string): Promise<void> => {
+    if (id.startsWith('mov-') || userId === 'guest') {
+        mockMovements = mockMovements.filter(m => m.id !== id);
+        return Promise.resolve();
+    }
+    await db.collection(COLLECTIONS.INVENTORY_MOVEMENTS).doc(id).delete();
   }
 };
