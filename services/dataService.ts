@@ -288,16 +288,29 @@ export const dataService = {
         }
     }
     try {
+        // Remove undefined fields to prevent Firestore errors
+        const cleanData = (obj: any) => {
+            const cleaned: any = {};
+            Object.keys(obj).forEach(key => {
+                if (obj[key] !== undefined) {
+                    cleaned[key] = obj[key];
+                }
+            });
+            return cleaned;
+        };
+
         if (!apt.id) {
             const { id, ...data } = apt;
-            console.log("Adding appointment:", { data, userId });
-            const docRef = await db.collection(COLLECTIONS.APPOINTMENTS).add({ ...data, userId });
+            const cleanedData = cleanData(data);
+            console.log("Adding appointment:", { cleanedData, userId });
+            const docRef = await db.collection(COLLECTIONS.APPOINTMENTS).add({ ...cleanedData, userId });
             return { ...apt, id: docRef.id };
         } else {
             console.log("Updating appointment:", { id: apt.id, userId });
             const aptRef = db.collection(COLLECTIONS.APPOINTMENTS).doc(apt.id);
             const { id, ...data } = apt;
-            await aptRef.update({ ...data, userId });
+            const cleanedData = cleanData(data);
+            await aptRef.update({ ...cleanedData, userId });
             return apt;
         }
     } catch (err) {

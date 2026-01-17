@@ -360,8 +360,8 @@ const App: React.FC = () => {
       const endH = Math.floor(totalMinutes / 60);
       const endM = totalMinutes % 60;
 
-      const defaultService = options?.serviceTypeId ? services.find(s => s.id === options.serviceTypeId) : (services.length > 0 ? services[0] : null);
-      const defaultClient = options?.clientId ? clients.find(c => c.id === options.clientId) : (clients.length > 0 ? clients[0] : null);
+      const defaultService = options?.serviceTypeId ? services.find(s => s.id === options.serviceTypeId) : null;
+      const defaultClient = options?.clientId ? clients.find(c => c.id === options.clientId) : null;
 
       const defaultBasePrice = defaultService?.defaultPrice || 0;
       const defaultClientDiscount = defaultClient?.discountPercentage || 0;
@@ -1271,6 +1271,34 @@ const App: React.FC = () => {
         <Modal isOpen={isServiceModalOpen} onClose={() => setServiceModalOpen(false)} title="Tratamiento">
              <form onSubmit={handleSaveService} className="space-y-4">
                 <div><label className={labelClass}>Nombre</label><input type="text" required className={inputClass} value={serviceForm.name || ''} onChange={e => setServiceForm({...serviceForm, name: e.target.value})} /></div>
+                <div>
+                  <label className={labelClass}>Color</label>
+                  <div className="grid grid-cols-4 gap-2 mt-2">
+                    {[
+                      { value: 'bg-blue-100 text-blue-800', label: 'Azul' },
+                      { value: 'bg-teal-100 text-teal-800', label: 'Turquesa' },
+                      { value: 'bg-purple-100 text-purple-800', label: 'Morado' },
+                      { value: 'bg-indigo-100 text-indigo-800', label: 'Índigo' },
+                      { value: 'bg-orange-100 text-orange-800', label: 'Naranja' },
+                      { value: 'bg-rose-100 text-rose-800', label: 'Rosa' },
+                      { value: 'bg-green-100 text-green-800', label: 'Verde' },
+                      { value: 'bg-amber-100 text-amber-800', label: 'Ámbar' },
+                      { value: 'bg-pink-100 text-pink-800', label: 'Rosa Fuerte' },
+                      { value: 'bg-cyan-100 text-cyan-800', label: 'Cian' },
+                      { value: 'bg-lime-100 text-lime-800', label: 'Lima' },
+                      { value: 'bg-emerald-100 text-emerald-800', label: 'Esmeralda' }
+                    ].map(color => (
+                      <button
+                        key={color.value}
+                        type="button"
+                        onClick={() => setServiceForm({...serviceForm, color: color.value})}
+                        className={`p-2 rounded-lg text-xs font-medium transition-all ${color.value} ${serviceForm.color === color.value ? 'ring-2 ring-teal-600 ring-offset-2 dark:ring-offset-gray-900' : 'opacity-60 hover:opacity-100'}`}
+                      >
+                        {color.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                    <div><label className={labelClass}>Precio</label><input type="number" min="0" className={inputClass} value={serviceForm.defaultPrice || 0} onChange={e => setServiceForm({...serviceForm, defaultPrice: Number(e.target.value)})} /></div>
                    <div><label className={labelClass}>Duración (min)</label><input type="number" min="1" className={inputClass} value={serviceForm.defaultDuration || 0} onChange={e => setServiceForm({...serviceForm, defaultDuration: Number(e.target.value)})} /></div>
