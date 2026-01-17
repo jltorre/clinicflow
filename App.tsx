@@ -332,7 +332,7 @@ const App: React.FC = () => {
   };
 
   const handleOpenAptModal = (apt?: Appointment, date?: Date, time?: string, options?: { clientId?: string; serviceTypeId?: string }) => {
-    const defaultStatus = statuses.find(s => s.isDefault) || statuses[0];
+    const defaultStatus = statuses.find(s => s.isInitial) || statuses.find(s => s.isDefault) || statuses[0];
     if (apt) {
       setEditingApt(apt);
       const [h, m] = apt.startTime.split(':').map(Number);
@@ -481,6 +481,8 @@ const App: React.FC = () => {
     const oldApt = editingApt;
     const newItems = aptForm.inventoryItems || [];
     const oldItems = oldApt?.inventoryItems || [];
+    const oldIsBillable = statuses.find(s => s.id === oldApt?.statusId)?.isBillable || false;
+    const newIsBillable = statuses.find(s => s.id === aptForm.statusId)?.isBillable || false;
 
     // Combine all unique item IDs
     const allItemIds = Array.from(new Set([...newItems.map(i => i.itemId), ...oldItems.map(i => i.itemId)]));
@@ -488,24 +490,37 @@ const App: React.FC = () => {
     for (const itemId of allItemIds) {
         const newItem = newItems.find(i => i.itemId === itemId);
         const oldItem = oldItems.find(i => i.itemId === itemId);
-        const diff = (newItem?.quantity || 0) - (oldItem?.quantity || 0);
+        
+        let stockDiff = 0;
+        
+        if (!oldIsBillable && newIsBillable) {
+            // Transition: Non-billable -> Billable. Deduct all new items.
+            stockDiff = (newItem?.quantity || 0);
+        } else if (oldIsBillable && !newIsBillable) {
+            // Transition: Billable -> Non-billable. Replenish all old items.
+            stockDiff = -(oldItem?.quantity || 0);
+        } else if (oldIsBillable && newIsBillable) {
+            // Transition: Billable -> Billable. Handle difference.
+            stockDiff = (newItem?.quantity || 0) - (oldItem?.quantity || 0);
+        }
+        // If !oldIsBillable && !newIsBillable, no stock change occurs.
 
-        if (diff !== 0) {
+        if (stockDiff !== 0) {
             const invItem = inventory.find(i => i.id === itemId);
             if (invItem) {
-                const updatedInvItem = { ...invItem, stock: invItem.stock - diff };
+                const updatedInvItem = { ...invItem, stock: invItem.stock - stockDiff };
                 await dataService.saveInventoryItem(updatedInvItem, uid);
                 
                 // Record movement
                 await dataService.saveInventoryMovement({
                     id: '',
                     itemId,
-                    type: diff > 0 ? 'sale' : 'adjustment',
-                    quantity: -diff,
+                    type: stockDiff > 0 ? 'sale' : 'adjustment',
+                    quantity: -stockDiff,
                     date: aptForm.date || new Date().toISOString(),
                     price: newItem?.unitPrice || oldItem?.unitPrice || invItem.salePrice,
                     appointmentId: saved.id,
-                    notes: diff > 0 ? `Venta en cita ${saved.id}` : `Ajuste por edición de cita ${saved.id}`,
+                    notes: stockDiff > 0 ? `Venta en cita ${saved.id}` : `Ajuste por edición de cita ${saved.id}`,
                     createdAt: Date.now()
                 }, uid);
 
@@ -550,9 +565,10 @@ const App: React.FC = () => {
           title: "¿Eliminar Cita?",
           message: "¿Estás seguro de que quieres borrar esta cita permanentemente?",
           onConfirm: async () => {
-             // Replenish stock before deleting
+             // Replenish stock before deleting ONLY IF it was a billable appointment
+             const isBillableToReplenish = statuses.find(s => s.id === editingApt.statusId)?.isBillable || false;
              const items = editingApt.inventoryItems || [];
-              if (items.length > 0) {
+              if (isBillableToReplenish && items.length > 0) {
                   for (const item of items) {
                       const invItem = inventory.find(i => i.id === item.itemId);
                       if (invItem) {
@@ -623,13 +639,18 @@ const App: React.FC = () => {
   const handleSaveStatus = async (status: Partial<AppStatus>) => {
       const uid = getUid(); if(!uid) return;
       let updatedStatuses = [...statuses];
-      if (status.isDefault) {
+      if (status.isDefault || status.isInitial) {
           updatedStatuses = updatedStatuses.map(s => {
-              if (s.id !== status.id && s.isDefault) {
+              let updatedS = { ...s };
+              if (status.isDefault && s.id !== status.id && s.isDefault) {
                   dataService.saveStatus({ ...s, isDefault: false }, uid);
-                  return { ...s, isDefault: false };
+                  updatedS.isDefault = false;
               }
-              return s;
+              if (status.isInitial && s.id !== status.id && s.isInitial) {
+                  dataService.saveStatus({ ...s, isInitial: false }, uid);
+                  updatedS.isInitial = false;
+              }
+              return updatedS;
           });
       }
       const saved = await dataService.saveStatus(status as AppStatus, uid);
@@ -884,6 +905,7 @@ const App: React.FC = () => {
                 onSchedule={handleScheduleFromDetail}
                 calculateFinalPrice={calculateFinalPrice}
                 onToggleTreatmentFinished={handleToggleTreatmentFinished}
+                onEditAppointment={handleOpenAptModal}
             />
         )}
         {activeTab === 'services' && 
@@ -950,6 +972,7 @@ const App: React.FC = () => {
                 onUpdate={(item) => setInventory(inventory.map(i => i.id === item.id ? item : i))}
                 onViewHistory={(item) => handleViewInventoryHistory(item.id)}
                 onDeleteRequest={handleDeleteInventoryRequest}
+                statuses={statuses}
             />
         )}
         {activeTab === 'inventory-detail' && selectedInventoryItemIdForDetailView && (
@@ -1195,15 +1218,33 @@ const App: React.FC = () => {
                 <div><label className={labelClass}>Nombre</label><input type="text" required className={inputClass} value={staffForm.name || ''} onChange={e => setStaffForm({...staffForm, name: e.target.value})} /></div>
                 <div><label className={labelClass}>Coste Hora Base (€)</label><input type="number" required className={inputClass} value={staffForm.defaultRate || ''} onChange={e => setStaffForm({...staffForm, defaultRate: Number(e.target.value)})} /></div>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
+                    <p className="text-xs font-bold text-gray-500 uppercase px-2 mb-1">Especialidades y Costes Específicos</p>
                     {services.map(s => (
-                        <div key={s.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-md">
-                            <label className="flex items-center space-x-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                        <div key={s.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-md border border-gray-100 dark:border-gray-600">
+                            <label className="flex items-center space-x-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer flex-1">
                                 <input type="checkbox" checked={staffForm.specialties?.includes(s.id)} onChange={e => {
                                     const specs = staffForm.specialties || [];
                                     setStaffForm({ ...staffForm, specialties: e.target.checked ? [...specs, s.id] : specs.filter(id => id !== s.id) });
                                 }} className="rounded text-teal-600" />
-                                <span>{s.name}</span>
+                                <span className="truncate">{s.name}</span>
                             </label>
+                            {staffForm.specialties?.includes(s.id) && (
+                                <div className="flex items-center gap-1 w-24">
+                                    <span className="text-[10px] text-gray-400">€/h</span>
+                                    <input 
+                                        type="number" 
+                                        className="w-full rounded border-gray-300 dark:border-gray-600 text-xs p-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                        placeholder={staffForm.defaultRate?.toString() || '0'}
+                                        value={staffForm.rates?.[s.id] || ''}
+                                        onChange={e => {
+                                            const newRates = { ...(staffForm.rates || {}) };
+                                            if (e.target.value === '') delete newRates[s.id];
+                                            else newRates[s.id] = Number(e.target.value);
+                                            setStaffForm({ ...staffForm, rates: newRates });
+                                        }}
+                                    />
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -1232,7 +1273,10 @@ const App: React.FC = () => {
                    <div><label className={labelClass}>Precio</label><input type="number" min="0" className={inputClass} value={serviceForm.defaultPrice || 0} onChange={e => setServiceForm({...serviceForm, defaultPrice: Number(e.target.value)})} /></div>
                    <div><label className={labelClass}>Duración (min)</label><input type="number" min="1" className={inputClass} value={serviceForm.defaultDuration || 0} onChange={e => setServiceForm({...serviceForm, defaultDuration: Number(e.target.value)})} /></div>
                 </div>
-                <div><label className={labelClass}>Recurrencia (Días)</label><input type="number" min="0" className={inputClass} value={serviceForm.recurrenceDays || 0} onChange={e => setServiceForm({...serviceForm, recurrenceDays: Number(e.target.value)})} /></div>
+                <div className="grid grid-cols-2 gap-4">
+                   <div><label className={labelClass}>Recurrencia (Días)</label><input type="number" min="0" className={inputClass} value={serviceForm.recurrenceDays || 0} onChange={e => setServiceForm({...serviceForm, recurrenceDays: Number(e.target.value)})} /></div>
+                   <div><label className={labelClass}>Avisar en "Próximos" (días antes)</label><input type="number" min="0" className={inputClass} value={serviceForm.upcomingThresholdDays || 7} onChange={e => setServiceForm({...serviceForm, upcomingThresholdDays: Number(e.target.value)})} /></div>
+                </div>
                 <button type="submit" className="w-full bg-teal-600 text-white p-2 rounded">Guardar</button>
             </form>
         </Modal>

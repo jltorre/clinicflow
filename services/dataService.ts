@@ -53,7 +53,10 @@ export const dataService = {
     if (userId === 'guest') return Promise.resolve([...mockClients]);
     try {
       const querySnapshot = await db.collection(COLLECTIONS.CLIENTS).where("userId", "==", userId).get();
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
+      return querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return { ...data, id: doc.id } as Client;
+      });
     } catch (e) { console.error(e); return []; }
   },
   
@@ -68,15 +71,21 @@ export const dataService = {
             return Promise.resolve(client);
         }
     }
-    if (!client.id) {
-        const { id, ...data } = client;
-        const docRef = await db.collection(COLLECTIONS.CLIENTS).add({ ...data, userId });
-        return { ...client, id: docRef.id };
-    } else {
-        const clientRef = db.collection(COLLECTIONS.CLIENTS).doc(client.id);
-        const { id, ...data } = client;
-        await clientRef.update(data);
-        return client;
+    try {
+        if (!client.id) {
+            const { id, ...data } = client;
+            console.log("Adding client:", { data, userId });
+            const docRef = await db.collection(COLLECTIONS.CLIENTS).add({ ...data, userId });
+            return { ...client, id: docRef.id };
+        } else {
+            const clientRef = db.collection(COLLECTIONS.CLIENTS).doc(client.id);
+            const { id, ...data } = client;
+            await clientRef.update({ ...data, userId });
+            return client;
+        }
+    } catch (err) {
+        console.error("Firestore Save Client Error:", err);
+        throw err;
     }
   },
   
@@ -94,7 +103,10 @@ export const dataService = {
     if (userId === 'guest') return Promise.resolve([...mockServices]);
     try {
       const querySnapshot = await db.collection(COLLECTIONS.TREATMENTS).where("userId", "==", userId).get();
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ServiceType));
+      return querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return { ...data, id: doc.id } as ServiceType;
+      });
     } catch (e) { console.error(e); return []; }
   },
   
@@ -109,15 +121,22 @@ export const dataService = {
             return Promise.resolve(service);
         }
     }
-    if (!service.id) {
-        const { id, ...data } = service;
-        const docRef = await db.collection(COLLECTIONS.TREATMENTS).add({ ...data, userId });
-        return { ...service, id: docRef.id };
-    } else {
-        const serviceRef = db.collection(COLLECTIONS.TREATMENTS).doc(service.id);
-        const { id, ...data } = service;
-        await serviceRef.update(data);
-        return service;
+    try {
+        if (!service.id) {
+            const { id, ...data } = service;
+            console.log("Adding service:", { data, userId });
+            const docRef = await db.collection(COLLECTIONS.TREATMENTS).add({ ...data, userId });
+            return { ...service, id: docRef.id };
+        } else {
+            console.log("Updating service:", { id: service.id, userId });
+            const serviceRef = db.collection(COLLECTIONS.TREATMENTS).doc(service.id);
+            const { id, ...data } = service;
+            await serviceRef.update({ ...data, userId });
+            return service;
+        }
+    } catch (err) {
+        console.error("Firestore Save Service Error:", err);
+        throw err;
     }
   },
   
@@ -135,14 +154,19 @@ export const dataService = {
       if (userId === 'guest') return Promise.resolve([...mockStatuses]);
       try {
           const querySnapshot = await db.collection(COLLECTIONS.STATUSES).where("userId", "==", userId).get();
-          const statuses = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppStatus));
+          const statuses = querySnapshot.docs.map(doc => {
+              const data = doc.data();
+              return { ...data, id: doc.id } as AppStatus;
+          });
           
           if (statuses.length === 0) {
               const defaults = MOCK_STATUSES;
               const created = [];
               for (const d of defaults) {
-                  const docRef = await db.collection(COLLECTIONS.STATUSES).add({ ...d, userId });
-                  created.push({ id: docRef.id, ...d });
+                  const { id: _, ...cleanData } = d;
+                  const payload = { ...cleanData, userId };
+                  const docRef = await db.collection(COLLECTIONS.STATUSES).add(payload);
+                  created.push({ ...payload, id: docRef.id });
               }
               return created;
           }
@@ -161,15 +185,22 @@ export const dataService = {
               return Promise.resolve(status);
           }
       }
-      if (!status.id) {
-          const { id, ...data } = status;
-          const docRef = await db.collection(COLLECTIONS.STATUSES).add({ ...data, userId });
-          return { ...status, id: docRef.id };
-      } else {
-          const ref = db.collection(COLLECTIONS.STATUSES).doc(status.id);
-          const { id, ...data } = status;
-          await ref.update(data);
-          return status;
+      try {
+          if (!status.id) {
+              const { id, ...data } = status;
+              console.log("Adding status:", { data, userId });
+              const docRef = await db.collection(COLLECTIONS.STATUSES).add({ ...data, userId });
+              return { ...status, id: docRef.id };
+          } else {
+              console.log("Updating status:", { id: status.id, userId });
+              const ref = db.collection(COLLECTIONS.STATUSES).doc(status.id);
+              const { id, ...data } = status;
+              await ref.update({ ...data, userId });
+              return status;
+          }
+      } catch (err) {
+          console.error("Firestore Save Status Error:", err);
+          throw err;
       }
   },
 
@@ -187,7 +218,10 @@ export const dataService = {
       if (userId === 'guest') return Promise.resolve([...mockStaff]);
       try {
           const qs = await db.collection(COLLECTIONS.STAFF).where("userId", "==", userId).get();
-          return qs.docs.map(doc => ({ id: doc.id, ...doc.data() } as Staff));
+          return qs.docs.map(doc => {
+              const data = doc.data();
+              return { ...data, id: doc.id } as Staff;
+          });
       } catch(e) { console.error(e); return []; }
   },
 
@@ -202,15 +236,22 @@ export const dataService = {
               return Promise.resolve(staff);
           }
       }
-      if (!staff.id) {
-          const { id, ...data } = staff;
-          const docRef = await db.collection(COLLECTIONS.STAFF).add({ ...data, userId });
-          return { ...staff, id: docRef.id };
-      } else {
-          const ref = db.collection(COLLECTIONS.STAFF).doc(staff.id);
-          const { id, ...data } = staff;
-          await ref.update(data);
-          return staff;
+      try {
+          if (!staff.id) {
+              const { id, ...data } = staff;
+              console.log("Adding staff:", { data, userId });
+              const docRef = await db.collection(COLLECTIONS.STAFF).add({ ...data, userId });
+              return { ...staff, id: docRef.id };
+          } else {
+              console.log("Updating staff:", { id: staff.id, userId });
+              const ref = db.collection(COLLECTIONS.STAFF).doc(staff.id);
+              const { id, ...data } = staff;
+              await ref.update({ ...data, userId });
+              return staff;
+          }
+      } catch (err) {
+          console.error("Firestore Save Staff Error:", err);
+          throw err;
       }
   },
 
@@ -228,7 +269,10 @@ export const dataService = {
     if (userId === 'guest') return Promise.resolve([...mockAppointments]);
     try {
       const querySnapshot = await db.collection(COLLECTIONS.APPOINTMENTS).where("userId", "==", userId).get();
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
+      return querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return { ...data, id: doc.id } as Appointment;
+      });
     } catch (e) { console.error(e); return []; }
   },
   
@@ -243,15 +287,22 @@ export const dataService = {
             return Promise.resolve(apt);
         }
     }
-    if (!apt.id) {
-        const { id, ...data } = apt;
-        const docRef = await db.collection(COLLECTIONS.APPOINTMENTS).add({ ...data, userId });
-        return { ...apt, id: docRef.id };
-    } else {
-        const aptRef = db.collection(COLLECTIONS.APPOINTMENTS).doc(apt.id);
-        const { id, ...data } = apt;
-        await aptRef.update(data);
-        return apt;
+    try {
+        if (!apt.id) {
+            const { id, ...data } = apt;
+            console.log("Adding appointment:", { data, userId });
+            const docRef = await db.collection(COLLECTIONS.APPOINTMENTS).add({ ...data, userId });
+            return { ...apt, id: docRef.id };
+        } else {
+            console.log("Updating appointment:", { id: apt.id, userId });
+            const aptRef = db.collection(COLLECTIONS.APPOINTMENTS).doc(apt.id);
+            const { id, ...data } = apt;
+            await aptRef.update({ ...data, userId });
+            return apt;
+        }
+    } catch (err) {
+        console.error("Firestore Save Appointment Error:", err);
+        throw err;
     }
   },
   
@@ -269,7 +320,10 @@ export const dataService = {
     if (userId === 'guest') return Promise.resolve([...mockInventory]);
     try {
       const querySnapshot = await db.collection(COLLECTIONS.INVENTORY).where("userId", "==", userId).get();
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryItem));
+      return querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return { ...data, id: doc.id } as InventoryItem;
+      });
     } catch (e) { console.error(e); return []; }
   },
 
@@ -284,15 +338,22 @@ export const dataService = {
             return Promise.resolve(item);
         }
     }
-    if (!item.id) {
-        const { id, ...data } = item;
-        const docRef = await db.collection(COLLECTIONS.INVENTORY).add({ ...data, userId });
-        return { ...item, id: docRef.id };
-    } else {
-        const ref = db.collection(COLLECTIONS.INVENTORY).doc(item.id);
-        const { id, ...data } = item;
-        await ref.update(data);
-        return item;
+    try {
+        if (!item.id) {
+            const { id, ...data } = item;
+            console.log("Adding inventory item:", { data, userId });
+            const docRef = await db.collection(COLLECTIONS.INVENTORY).add({ ...data, userId });
+            return { ...item, id: docRef.id };
+        } else {
+            console.log("Updating inventory item:", { id: item.id, userId });
+            const ref = db.collection(COLLECTIONS.INVENTORY).doc(item.id);
+            const { id, ...data } = item;
+            await ref.update({ ...data, userId });
+            return item;
+        }
+    } catch (err) {
+        console.error("Firestore Save Inventory Item Error:", err);
+        throw err;
     }
   },
 
@@ -316,7 +377,10 @@ export const dataService = {
       let query = db.collection(COLLECTIONS.INVENTORY_MOVEMENTS).where("userId", "==", userId);
       if (itemId) query = query.where("itemId", "==", itemId);
       const querySnapshot = await query.get();
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryMovement)).sort((a,b) => b.createdAt - a.createdAt);
+      return querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return { ...data, id: doc.id } as InventoryMovement;
+      }).sort((a,b) => b.createdAt - a.createdAt);
     } catch (e) { console.error(e); return []; }
   },
 
@@ -331,15 +395,22 @@ export const dataService = {
             return Promise.resolve(movement);
         }
     }
-    if (!movement.id) {
-        const { id, ...data } = movement;
-        const docRef = await db.collection(COLLECTIONS.INVENTORY_MOVEMENTS).add({ ...data, userId });
-        return { ...movement, id: docRef.id };
-    } else {
-        const ref = db.collection(COLLECTIONS.INVENTORY_MOVEMENTS).doc(movement.id);
-        const { id, ...data } = movement;
-        await ref.update(data);
-        return movement;
+    try {
+        if (!movement.id) {
+            const { id, ...data } = movement;
+            console.log("Adding inventory movement:", { data, userId });
+            const docRef = await db.collection(COLLECTIONS.INVENTORY_MOVEMENTS).add({ ...data, userId });
+            return { ...movement, id: docRef.id };
+        } else {
+            console.log("Updating inventory movement:", { id: movement.id, userId });
+            const ref = db.collection(COLLECTIONS.INVENTORY_MOVEMENTS).doc(movement.id);
+            const { id, ...data } = movement;
+            await ref.update({ ...data, userId });
+            return movement;
+        }
+    } catch (err) {
+        console.error("Firestore Save Movement Error:", err);
+        throw err;
     }
   },
 

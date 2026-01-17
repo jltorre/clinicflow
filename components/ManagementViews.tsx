@@ -83,7 +83,7 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, appointments, s
         nextVisit: futureApts.length > 0 ? futureApts[0].date : null
       };
     });
-  }, [clients, appointments, statuses]);
+  }, [clients, appointments, statuses, year]);
 
   const sortedClients = useMemo(() => {
     let sortableClients = [...clientsWithStats];
@@ -133,10 +133,7 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, appointments, s
   const clientKPIs = useMemo(() => {
     const totalVisits = clientsWithStats.reduce((sum, c) => sum + c.visits, 0);
     const totalRevenue = clientsWithStats.reduce((sum, c) => sum + c.totalSpent, 0);
-    const threeMonthsAgo = subMonths(new Date(), 3);
-    const activeClients = new Set(
-        appointments.filter(a => isBillable(a.statusId, statuses) && new Date(a.date) > threeMonthsAgo).map(a => a.clientId)
-    ).size;
+    const activeClients = clientsWithStats.filter(c => c.visits > 0).length;
 
     return {
         totalClients: clients.length,
@@ -144,7 +141,7 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, appointments, s
         averageTicket: totalVisits > 0 ? formatCurrency(totalRevenue / totalVisits) : formatCurrency(0),
         activeClients
     }
-  }, [clients, clientsWithStats, appointments, statuses]);
+  }, [clients, clientsWithStats]);
 
   // Pagination Logic
   const totalPages = Math.ceil(sortedClients.length / itemsPerPage);
@@ -194,7 +191,7 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, appointments, s
                 <KPIWidget icon={<Users className="w-5 h-5 text-teal-600 dark:text-teal-400" />} label="Clientes Totales" value={clientKPIs.totalClients} />
                 <KPIWidget icon={<BarChart2 className="w-5 h-5 text-teal-600 dark:text-teal-400" />} label="Visitas Realizadas" value={clientKPIs.totalVisits} />
                 <KPIWidget icon={<TrendingUp className="w-5 h-5 text-teal-600 dark:text-teal-400" />} label="Ticket Medio" value={clientKPIs.averageTicket} />
-                <KPIWidget icon={<CheckSquare className="w-5 h-5 text-teal-600 dark:text-teal-400" />} label="Activos (3m)" value={clientKPIs.activeClients} />
+                <KPIWidget icon={<CheckSquare className="w-5 h-5 text-teal-600 dark:text-teal-400" />} label={`Activos (${year})`} value={clientKPIs.activeClients} />
             </div>
 
              <div className="relative">
@@ -398,7 +395,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, services, appointme
                 scheduledHours: Number(scheduledHours.toFixed(1)),
             };
         });
-    }, [staff, appointments, statuses]);
+    }, [staff, appointments, statuses, year]);
 
     const sortedStaff = useMemo(() => {
         let sortableStaff = [...staffWithStats];
@@ -529,6 +526,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, services, appointme
 interface InventoryListProps {
   inventory: InventoryItem[];
   appointments: Appointment[];
+  statuses: AppStatus[];
   year: number;
   onYearChange: (year: number) => void;
   onAdd: () => void;
@@ -538,7 +536,7 @@ interface InventoryListProps {
   onDeleteRequest: (item: InventoryItem) => void;
 }
 
-export const InventoryList: React.FC<InventoryListProps> = ({ inventory, appointments, year, onYearChange, onAdd, onEdit, onUpdate, onViewHistory, onDeleteRequest }) => {
+export const InventoryList: React.FC<InventoryListProps> = ({ inventory, appointments, statuses, year, onYearChange, onAdd, onEdit, onUpdate, onViewHistory, onDeleteRequest }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'name', direction: 'asc' });
   const [addStockItem, setAddStockItem] = useState<InventoryItem | null>(null);
@@ -586,7 +584,28 @@ export const InventoryList: React.FC<InventoryListProps> = ({ inventory, appoint
       result = result.filter(i => i.name.toLowerCase().includes(lower) || i.category?.toLowerCase().includes(lower));
     }
 
-    result.sort((a, b) => {
+    // Calculate reserved stock for all items at once
+    const reservedByItem = appointments.reduce((acc, apt) => {
+        const status = statuses.find(s => s.id === apt.statusId);
+        const isCancelled = status?.name.toLowerCase().includes('cancel') || status?.name.toLowerCase().includes('anul');
+        if (isCancelled || status?.isBillable) return acc;
+        
+        apt.inventoryItems?.forEach(si => {
+            acc[si.itemId] = (acc[si.itemId] || 0) + si.quantity;
+        });
+        return acc;
+    }, {} as Record<string, number>);
+
+    const resultWithStats = result.map(item => {
+        const reserved = reservedByItem[item.id] || 0;
+        return {
+            ...item,
+            reserved,
+            available: item.stock - reserved
+        };
+    });
+
+    resultWithStats.sort((a, b) => {
       const aValue = (a as any)[sortConfig.key];
       const bValue = (b as any)[sortConfig.key];
       if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -594,8 +613,8 @@ export const InventoryList: React.FC<InventoryListProps> = ({ inventory, appoint
       return 0;
     });
 
-    return result;
-  }, [inventory, searchTerm, sortConfig]);
+    return resultWithStats;
+  }, [inventory, searchTerm, sortConfig, appointments, statuses]);
 
   const requestSort = (key: string) => {
     setSortConfig(prev => ({
@@ -721,6 +740,12 @@ export const InventoryList: React.FC<InventoryListProps> = ({ inventory, appoint
                 <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 text-right" onClick={() => requestSort('stock')}>
                   <div className="flex items-center justify-end gap-2 whitespace-nowrap">Stock {getSortIndicator('stock')}</div>
                 </th>
+                <th className="px-6 py-4 font-semibold text-amber-600 dark:text-amber-400 text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestSort('reserved')}>
+                  <div className="flex items-center justify-end gap-2 whitespace-nowrap">Reservado {getSortIndicator('reserved')}</div>
+                </th>
+                <th className="px-6 py-4 font-semibold text-teal-600 dark:text-teal-400 text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestSort('available')}>
+                  <div className="flex items-center justify-end gap-2 whitespace-nowrap">Disponible {getSortIndicator('available')}</div>
+                </th>
                 <th className="px-6 py-4 font-semibold text-teal-600 dark:text-teal-400 text-right whitespace-nowrap">Vendido ({year})</th>
                 <th className="px-6 py-4 font-semibold text-teal-600 dark:text-teal-400 text-right whitespace-nowrap">Ingreso ({year})</th>
                 <th className="px-6 py-4 font-semibold text-emerald-600 dark:text-emerald-400 text-right whitespace-nowrap">Bf. Real ({year})</th>
@@ -752,6 +777,16 @@ export const InventoryList: React.FC<InventoryListProps> = ({ inventory, appoint
                     {item.stock}
                     </div>
                     {item.stock <= (item.minStock || 5) && <div className="text-[10px] text-red-500 uppercase font-bold">Stock Bajo</div>}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="font-medium text-amber-600 dark:text-amber-400">
+                        {item.reserved}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="font-bold text-teal-600 dark:text-teal-400">
+                        {item.available}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-right font-medium text-gray-900 dark:text-white">{productMetrics[item.id]?.sold || 0}</td>
                   <td className="px-6 py-4 text-right font-medium text-teal-600 dark:text-teal-400">{formatCurrency(productMetrics[item.id]?.revenue || 0)}</td>
@@ -871,7 +906,7 @@ export const ServiceList: React.FC<ServiceListProps> = ({ services, clients, app
             return { ...service, activeCount, finishedCount, realizedRevenue, scheduledRevenue };
         });
         // FIX: Added statuses to dependency array.
-    }, [services, clients, appointments, statuses]);
+    }, [services, clients, appointments, statuses, year]);
 
     const serviceKPIs = useMemo(() => {
         const totalRealized = servicesWithStats.reduce((sum, s) => sum + s.realizedRevenue, 0);
@@ -969,6 +1004,9 @@ export const ServiceList: React.FC<ServiceListProps> = ({ services, clients, app
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-400 uppercase cursor-pointer hover:text-gray-800 dark:hover:text-gray-200" onClick={() => requestSort('realizedRevenue')}>
                                     <div className="flex items-center">Ingresos Realizados {getSortIndicator('realizedRevenue')}</div>
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-400 uppercase cursor-pointer hover:text-gray-800 dark:hover:text-gray-200" onClick={() => requestSort('scheduledRevenue')}>
+                                    <div className="flex items-center">Ingresos Programados {getSortIndicator('scheduledRevenue')}</div>
                                 </th>
                                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 dark:text-gray-400 uppercase">Acciones</th>
                             </tr>

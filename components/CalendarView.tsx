@@ -243,11 +243,16 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             apt.notes?.toLowerCase().includes(lowerSearch)
         );
     }
-    if (viewMode === 'list' && listScope === 'week') {
-        const start = getStartOfWeek(currentDate, { weekStartsOn: 1 });
-        const end = endOfWeek(currentDate, { locale: es, weekStartsOn: 1 });
-        end.setHours(23, 59, 59, 999);
-        result = result.filter(apt => isWithinInterval(new Date(apt.date), { start, end }));
+    if (viewMode === 'list') {
+        if (listScope === 'week') {
+            const start = getStartOfWeek(currentDate, { weekStartsOn: 1 });
+            const end = endOfWeek(currentDate, { locale: es, weekStartsOn: 1 });
+            end.setHours(23, 59, 59, 999);
+            result = result.filter(apt => isWithinInterval(new Date(apt.date), { start, end }));
+        } else if (listScope === 'all') {
+            const targetYear = currentDate.getFullYear();
+            result = result.filter(apt => new Date(apt.date).getFullYear() === targetYear);
+        }
     }
     if (sortConfig) {
         result.sort((a, b) => {
@@ -282,6 +287,28 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     }
     return result;
   }, [appointments, selectedTreatments, selectedStatuses, viewMode, searchText, clients, listScope, currentDate, sortConfig, services, staff, statuses]);
+
+  const visibleAppointments = useMemo(() => {
+    if (viewMode === 'list') return sortedAppointments;
+    
+    let start: Date, end: Date;
+    if (viewMode === 'day') {
+        start = new Date(currentDate); start.setHours(0,0,0,0);
+        end = new Date(currentDate); end.setHours(23,59,59,999);
+    } else if (viewMode === 'week') {
+        start = getStartOfWeek(currentDate, { weekStartsOn: 1 });
+        end = endOfWeek(currentDate, { locale: es, weekStartsOn: 1 });
+        end.setHours(23, 59, 59, 999);
+    } else if (viewMode === 'month') {
+        start = getStartOfMonth(currentDate);
+        end = endOfMonth(currentDate);
+        end.setHours(23, 59, 59, 999);
+    } else {
+        return sortedAppointments;
+    }
+
+    return sortedAppointments.filter(apt => isWithinInterval(new Date(apt.date), { start, end }));
+  }, [sortedAppointments, viewMode, currentDate]);
 
   const getAppointmentsForDay = (day: Date) => {
     return sortedAppointments
@@ -367,6 +394,19 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                         <button onClick={() => setListScope('week')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${listScope === 'week' ? 'bg-white dark:bg-gray-600 shadow text-teal-600' : 'text-gray-700 dark:text-gray-400'}`}>Esta Semana</button>
                         <button onClick={() => setListScope('all')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${listScope === 'all' ? 'bg-white dark:bg-gray-600 shadow text-teal-600' : 'text-gray-700 dark:text-gray-400'}`}>Todo</button>
                     </div>
+                    {listScope === 'all' && (
+                        <select 
+                            className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-teal-500 text-gray-700 dark:text-gray-200"
+                            value={currentDate.getFullYear()}
+                            onChange={(e) => {
+                                const newDate = new Date(currentDate);
+                                newDate.setFullYear(Number(e.target.value));
+                                setCurrentDate(newDate);
+                            }}
+                        >
+                            {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                    )}
                 </div>
                 <button onClick={exportToCSV} className="flex items-center px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600">
                     <ListIcon className="w-4 h-4 mr-2" /> CSV
@@ -406,7 +446,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             </div>
             {totalPages > 1 && (
                 <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800">
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Mostrando <span className="font-medium">{indexOfFirstItem + 1}</span> a <span className="font-medium">{Math.min(indexOfLastItem, sortedAppointments.length)}</span></div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Mostrando <span className="font-medium">{indexOfFirstItem + 1}</span> a <span className="font-medium">{Math.min(indexOfLastItem, sortedAppointments.length)}</span> de <span className="font-medium">{sortedAppointments.length}</span></div>
                     <div className="flex space-x-2">
                         <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Anterior</button>
                         <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Siguiente</button>
@@ -564,6 +604,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           <div>
             <div className="flex items-center gap-2">
                  <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Agenda</h1>
+                 <span className="bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 px-2 py-0.5 rounded text-xs font-bold">
+                    {visibleAppointments.length} {visibleAppointments.length === 1 ? 'cita' : 'citas'}
+                 </span>
                  <div className="hidden md:flex items-center bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-0.5 ml-4">
                      <button onClick={handlePrev} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"><ChevronLeft className="w-4 h-4 text-gray-700 dark:text-gray-300" /></button>
                      <span className="px-3 text-sm font-medium text-gray-700 dark:text-gray-200 min-w-[140px] text-center capitalize">{viewMode === 'day' ? format(currentDate, 'd MMMM yyyy', {locale: es}) : viewMode === 'month' ? format(currentDate, 'MMMM yyyy', {locale: es}) : `${format(startDate, 'd MMM')} - ${format(endDate, 'd MMM', {locale: es})}`}</span>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Users, TrendingUp, DollarSign, Settings, Briefcase, ArrowRight, BadgeCheck } from 'lucide-react';
+import { X, Calendar, Users, TrendingUp, DollarSign, Settings, Briefcase, ArrowRight, BadgeCheck, Box } from 'lucide-react';
 
 interface OnboardingTourProps {
     isOpen: boolean;
@@ -18,23 +18,28 @@ const STEPS = [
         icon: <Calendar className="w-12 h-12 text-teal-600" />
     },
     {
-        title: "Gestión Completa",
-        description: "Administra tu base de datos en el menú 'Gestión'. Registra Clientes VIP, define Tratamientos con colores personalizados y configura tu Equipo con tarifas por especialidad.",
+        title: "Gestión de Equipo y Servicios",
+        description: "Define tus Tratamientos con colores y tiempos. Configura a tu Equipo asignando costes por hora específicos para cada tratamiento para un cálculo de beneficio exacto.",
         icon: <Briefcase className="w-12 h-12 text-blue-500" />
     },
     {
+        title: "Control de Inventario",
+        description: "Gestiona tu Stock físico y consulta las 'Reservas' automáticas de productos según tus próximas citas facturables. El stock se descuenta solo al completar la venta.",
+        icon: <Box className="w-12 h-12 text-orange-500" />
+    },
+    {
         title: "Analítica de Retención",
-        description: "El sistema detecta automáticamente qué clientes deberían haber vuelto según la recurrencia de sus tratamientos. ¡Contacta con ellos directamente desde la app!",
+        description: "El sistema detecta automáticamente qué clientes deberían volver según su tratamiento. Configura días de aviso personalizados para que nada se te escape.",
         icon: <TrendingUp className="w-12 h-12 text-purple-500" />
     },
     {
         title: "Control Financiero",
-        description: "Visualiza tus ingresos reales vs. pendientes. Analiza la rentabilidad de cada miembro del equipo restando su coste por hora al beneficio generado.",
+        description: "Visualiza tus ingresos reales vs. pendientes. Analiza la rentabilidad neta restando los costes de personal y materiales al beneficio generado.",
         icon: <DollarSign className="w-12 h-12 text-emerald-500" />
     },
     {
-        title: "Personalización Total",
-        description: "En 'Ajustes' puedes crear tus propios Estados de cita (ej: 'En Sala', 'Anulado') y definir cuáles cuentan como facturables para tus informes.",
+        title: "Personalización Avanzada",
+        description: "En 'Ajustes' puedes crear tus propios Estados (ej: 'En Sala'). Elige cuál es el estado por defecto para nuevas citas y cuáles cuentan como facturables.",
         icon: <Settings className="w-12 h-12 text-gray-600" />
     }
 ];

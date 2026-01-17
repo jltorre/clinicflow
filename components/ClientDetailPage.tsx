@@ -23,6 +23,7 @@ interface ClientDetailPageProps {
     onSchedule: (context: { clientId: string; serviceTypeId: string; recommendedDate: Date }) => void;
     calculateFinalPrice: (basePrice: number, discountPercentage: number) => number;
     onToggleTreatmentFinished: (clientId: string, serviceId: string) => void;
+    onEditAppointment: (appointment: Appointment) => void;
 }
 
 // Helper to format currency
@@ -48,6 +49,7 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
     onSchedule,
     calculateFinalPrice,
     onToggleTreatmentFinished,
+    onEditAppointment,
 }) => {
     const [appointmentFilter, setAppointmentFilter] = useState<'upcoming' | 'history'>('upcoming');
     const [serviceFilter, setServiceFilter] = useState<string>('all');
@@ -295,7 +297,7 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
                                         return (
                                             <div
                                                 key={apt.id}
-                                                // The onOpenAptModal call is handled by the parent App component
+                                                onClick={() => onEditAppointment(apt)}
                                                 className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border transition-colors cursor-pointer ${
                                                     isCancelled 
                                                     ? 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30 opacity-75' 

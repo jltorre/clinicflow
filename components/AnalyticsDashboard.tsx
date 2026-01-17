@@ -76,9 +76,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ clients,
       const recommendedDate = addDays(lastDate, service.recurrenceDays);
       const daysDiff = differenceInDays(today, recommendedDate);
 
+      const threshold = service.upcomingThresholdDays || 7;
+
       let status: ClientRetentionMetric['status'] = 'ontime';
       if (daysDiff > 0) status = 'overdue';
-      else if (daysDiff > -7) status = 'upcoming';
+      else if (daysDiff > -threshold) status = 'upcoming';
 
       return {
         clientId: client.id,
@@ -149,7 +151,20 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ clients,
         </div>
         <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
             <h3 className="text-base font-semibold text-gray-900 dark:text-white flex items-center mb-3"><Info className="w-5 h-5 text-teal-600 mr-2"/> Cómo funciona</h3>
-            <p className="text-sm text-gray-700 dark:text-gray-300">El sistema analiza la fecha de la última visita. Si el tratamiento está "Finalizado", no aparece.</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-gray-700 dark:text-gray-300">
+                <div>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 mb-1">Al día</span>
+                    <p>Tratamiento reciente. No aparecerá en la lista de atención hasta que se acerque su fecha de recurrencia.</p>
+                </div>
+                <div>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 mb-1">Próximos</span>
+                    <p>Clientes cuya fecha de recurrencia está cerca (según el margen configurado en cada tratamiento).</p>
+                </div>
+                <div>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 mb-1">Vencidos</span>
+                    <p>Clientes que ya deberían haber vuelto pero no tienen ninguna cita facturable posterior.</p>
+                </div>
+            </div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow ring-1 ring-gray-200 dark:ring-gray-700">

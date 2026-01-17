@@ -5,6 +5,7 @@ export interface AppStatus {
   color: string; // Tailwind class string e.g. 'bg-blue-100 text-blue-800'
   isBillable: boolean;
   isDefault?: boolean; // New field: determines which status is applied by the quick check button
+  isInitial?: boolean; // New field: determines which status is applied to new appointments
 }
 
 export interface Staff {
@@ -37,6 +38,7 @@ export interface ServiceType {
   recurrenceDays: number; // Days until next appointment of this type is recommended
   defaultDuration: number; // Duration in minutes
   color: string;
+  upcomingThresholdDays?: number; // Days before recurrence date to start showing as "upcoming"
 }
 
 export interface Appointment {

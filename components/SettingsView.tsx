@@ -48,7 +48,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ statuses, settings, 
           name: '',
           color: 'bg-gray-100 text-gray-800',
           isBillable: false,
-          isDefault: false
+          isDefault: false,
+          isInitial: false
       });
       setIsCreating(true);
   };
@@ -148,11 +149,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ statuses, settings, 
                                 <span className="text-sm text-gray-700 dark:text-gray-200 font-medium">¿Es Facturable?</span>
                             </label>
                             {statusForm.isBillable && (
-                                <label className="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors ml-4 border-l-2 border-gray-300 dark:border-gray-500">
+                                <label className="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors ml-4 border-l-2 border-emerald-300 dark:border-emerald-500">
                                     <input type="checkbox" className="rounded border-gray-300 text-teal-600 h-4 w-4" checked={statusForm.isDefault || false} onChange={e => setStatusForm({...statusForm, isDefault: e.target.checked})} />
-                                    <span className="text-xs text-gray-700 dark:text-gray-300">Usar por defecto para "Completar Rápido"</span>
+                                    <span className="text-xs text-gray-700 dark:text-gray-300">Usar para el botón de "Completar Rápido"</span>
                                 </label>
                             )}
+                            <label className="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors border-l-2 border-indigo-300 dark:border-indigo-500">
+                                <input type="checkbox" className="rounded border-gray-300 text-teal-600 h-4 w-4" checked={statusForm.isInitial || false} onChange={e => setStatusForm({...statusForm, isInitial: e.target.checked})} />
+                                <span className="text-xs text-gray-700 dark:text-gray-300">Seleccionar por defecto en nuevas citas</span>
+                            </label>
                         </div>
                     </div>
                     <div className="mt-4">
@@ -178,7 +183,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ statuses, settings, 
                              <span className={`px-2 py-1 rounded-md text-xs font-bold ${status.color}`}>{status.name}</span>
                              <div className="flex gap-1">
                                 {status.isBillable && <span className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 px-1.5 py-0.5 rounded">Facturable</span>}
-                                {status.isDefault && <span className="text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-1.5 py-0.5 rounded">Por Defecto</span>}
+                                {status.isDefault && <span className="text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-1.5 py-0.5 rounded flex items-center gap-1"><Check className="w-2 h-2" /> Completar Rápido</span>}
+                                {status.isInitial && <span className="text-[10px] bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 px-1.5 py-0.5 rounded flex items-center gap-1"><Plus className="w-2 h-2" /> Preseleccionado</span>}
                              </div>
                         </div>
                         <div className="flex items-center space-x-1">
