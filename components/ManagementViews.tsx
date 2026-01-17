@@ -263,22 +263,22 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, appointments, s
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-                 {totalPages > 1 && (
-                    <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                            Mostrando <span className="font-medium">{indexOfFirstItem + 1}</span> a <span className="font-medium">{Math.min(indexOfLastItem, sortedClients.length)}</span> de <span className="font-medium">{sortedClients.length}</span>
-                        </div>
-                        <div className="flex space-x-2">
-                            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Anterior</button>
-                            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Siguiente</button>
-                        </div>
-                    </div>
-                 )}
-            </div>
+                             ))}
+                         </tbody>
+                     </table>
+                 </div>
+                  {totalPages > 1 && (
+                      <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
+                          <div className="text-xs text-gray-600 dark:text-gray-400">
+                              Mostrando <span className="font-medium">{indexOfFirstItem + 1}</span> a <span className="font-medium">{Math.min(indexOfLastItem, sortedClients.length)}</span> de <span className="font-medium">{sortedClients.length}</span>
+                          </div>
+                          <div className="flex space-x-2">
+                              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Anterior</button>
+                              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Siguiente</button>
+                          </div>
+                      </div>
+                  )}
+             </div>
 
             {/* Mobile Card View */}
             <div className="grid gap-4 grid-cols-1 md:hidden">
@@ -362,7 +362,10 @@ interface StaffListProps {
 }
 
 export const StaffList: React.FC<StaffListProps> = ({ staff, services, appointments, statuses, year, onYearChange, onAdd, onEdit, onDeleteRequest, onViewStaff }) => {
+    const [search, setSearch] = useState('');
     const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'realizedRevenue', direction: 'desc' });
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     const staffWithStats = useMemo(() => {
         return staff.map(member => {
@@ -399,6 +402,17 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, services, appointme
 
     const sortedStaff = useMemo(() => {
         let sortableStaff = [...staffWithStats];
+
+        // Apply search filter
+        if (search) {
+            const lowerSearch = search.toLowerCase();
+            sortableStaff = sortableStaff.filter(s => 
+                s.name.toLowerCase().includes(lowerSearch) ||
+                (s.email && s.email.toLowerCase().includes(lowerSearch)) ||
+                (s.phone && s.phone.toLowerCase().includes(lowerSearch))
+            );
+        }
+
         if (sortConfig) {
             sortableStaff.sort((a, b) => {
                 let aValue: any;
@@ -422,7 +436,12 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, services, appointme
             });
         }
         return sortableStaff;
-    }, [staffWithStats, sortConfig]);
+    }, [staffWithStats, sortConfig, search]);
+
+    const totalPages = Math.ceil(sortedStaff.length / itemsPerPage);
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentStaff = sortedStaff.slice(indexOfFirstItem, indexOfLastItem);
 
     const requestSort = (key: string) => {
         let direction: 'asc' | 'desc' = 'asc';
@@ -459,6 +478,17 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, services, appointme
                     </div>
                 </div>
 
+                <div className="relative">
+                    <input 
+                        type="text" 
+                        placeholder="Buscar por nombre, email o teléfono..." 
+                        value={search}
+                        onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+                        className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                    />
+                    <Search className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
+                </div>
+
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow ring-1 ring-gray-200 dark:ring-gray-700 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -483,7 +513,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, services, appointme
                                 </tr>
                             </thead>
                             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                {sortedStaff.map(member => (
+                                {currentStaff.map(member => (
                                     <tr key={member.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-shadow cursor-pointer" onClick={() => onViewStaff(member.id)}>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center">
@@ -515,6 +545,17 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, services, appointme
                             </tbody>
                         </table>
                     </div>
+                    {totalPages > 1 && (
+                        <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
+                            <div className="text-xs text-gray-600 dark:text-gray-400">
+                                Mostrando <span className="font-medium">{indexOfFirstItem + 1}</span> a <span className="font-medium">{Math.min(indexOfLastItem, sortedStaff.length)}</span> de <span className="font-medium">{sortedStaff.length}</span>
+                            </div>
+                            <div className="flex space-x-2">
+                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Anterior</button>
+                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Siguiente</button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -539,6 +580,8 @@ interface InventoryListProps {
 export const InventoryList: React.FC<InventoryListProps> = ({ inventory, appointments, statuses, year, onYearChange, onAdd, onEdit, onUpdate, onViewHistory, onDeleteRequest }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'name', direction: 'asc' });
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const [addStockItem, setAddStockItem] = useState<InventoryItem | null>(null);
   const [addStockAmount, setAddStockAmount] = useState(1);
   const [addStockCost, setAddStockCost] = useState(0);
@@ -621,6 +664,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ inventory, appoint
       key,
       direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
     }));
+    setCurrentPage(1);
   };
 
   const getSortIndicator = (key: string) => {
@@ -659,6 +703,11 @@ export const InventoryList: React.FC<InventoryListProps> = ({ inventory, appoint
   const totalRealRevenue = (Object.values(productMetrics) as Array<{revenue: number}>).reduce((acc, m) => acc + m.revenue, 0);
   const totalRealSpent = (Object.values(productMetrics) as Array<{spent: number}>).reduce((acc, m) => acc + m.spent, 0);
   const totalRealProfit = totalRealRevenue - totalRealSpent;
+
+  const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentInventory = filteredInventory.slice(indexOfFirstItem, indexOfLastItem);
 
   return (
     <div className="space-y-6">
@@ -722,7 +771,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ inventory, appoint
               placeholder="Buscar por nombre o categoría..."
               className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
           </div>
         </div>
@@ -759,7 +808,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ inventory, appoint
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredInventory.map(item => (
+              {currentInventory.map(item => (
                 <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
                   <td className="px-6 py-4">
                     <div>
@@ -837,6 +886,18 @@ export const InventoryList: React.FC<InventoryListProps> = ({ inventory, appoint
             </tbody>
           </table>
         </div>
+        
+        {totalPages > 1 && (
+            <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                    Mostrando <span className="font-medium">{indexOfFirstItem + 1}</span> a <span className="font-medium">{Math.min(indexOfLastItem, filteredInventory.length)}</span> de <span className="font-medium">{filteredInventory.length}</span>
+                </div>
+                <div className="flex space-x-2">
+                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-xs disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Anterior</button>
+                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-xs disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Siguiente</button>
+                </div>
+            </div>
+        )}
         </div>
 
       {/* Removed old combined history/add modal logic */}
@@ -867,6 +928,7 @@ interface ServiceListProps {
 
 // FIX: Added statuses to destructuring props.
 export const ServiceList: React.FC<ServiceListProps> = ({ services, clients, appointments, statuses, year, onYearChange, onAdd, onEdit, onDeleteRequest, onViewService }) => {
+    const [search, setSearch] = useState('');
     const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'realizedRevenue', direction: 'desc' });
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -922,6 +984,15 @@ export const ServiceList: React.FC<ServiceListProps> = ({ services, clients, app
 
     const sortedServices = useMemo(() => {
         let sortableServices: ServiceWithStats[] = [...servicesWithStats];
+
+        // Apply search filter
+        if (search) {
+            const lowerSearch = search.toLowerCase();
+            sortableServices = sortableServices.filter(s => 
+                s.name.toLowerCase().includes(lowerSearch)
+            );
+        }
+
         if (sortConfig) {
             sortableServices.sort((a, b) => {
                 let aValue: any;
@@ -944,10 +1015,12 @@ export const ServiceList: React.FC<ServiceListProps> = ({ services, clients, app
             });
         }
         return sortableServices;
-    }, [servicesWithStats, sortConfig]);
+    }, [servicesWithStats, sortConfig, search]);
 
     const totalPages = Math.ceil(sortedServices.length / itemsPerPage);
-    const currentServices = sortedServices.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentServices = sortedServices.slice(indexOfFirstItem, indexOfLastItem);
 
     const requestSort = (key: string) => {
         let direction: 'asc' | 'desc' = 'asc';
@@ -989,6 +1062,17 @@ export const ServiceList: React.FC<ServiceListProps> = ({ services, clients, app
                 <KPIWidget icon={<DollarSign className="w-5 h-5 text-teal-600 dark:text-teal-400" />} label="Ingresos Realizados" value={serviceKPIs.totalRealized} />
                 <KPIWidget icon={<CalendarIcon className="w-5 h-5 text-teal-600 dark:text-teal-400" />} label="Ingresos Programados" value={serviceKPIs.totalScheduled} />
                 <KPIWidget icon={<TrendingUp className="w-5 h-5 text-teal-600 dark:text-teal-400" />} label="Trat. Más Rentable" value={serviceKPIs.mostProfitable} />
+            </div>
+
+            <div className="relative">
+                <input 
+                    type="text" 
+                    placeholder="Buscar tratamiento o descripción..." 
+                    value={search}
+                    onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                />
+                <Search className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
             </div>
 
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow ring-1 ring-gray-200 dark:ring-gray-700 overflow-hidden">
@@ -1050,8 +1134,8 @@ export const ServiceList: React.FC<ServiceListProps> = ({ services, clients, app
                 </div>
                 {totalPages > 1 && (
                     <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                            Mostrando <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="font-medium">{Math.min(currentPage * itemsPerPage, sortedServices.length)}</span> de <span className="font-medium">{sortedServices.length}</span>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">
+                            Mostrando <span className="font-medium">{indexOfFirstItem + 1}</span> a <span className="font-medium">{Math.min(indexOfLastItem, sortedServices.length)}</span> de <span className="font-medium">{sortedServices.length}</span>
                         </div>
                         <div className="flex space-x-2">
                             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Anterior</button>
@@ -1077,6 +1161,7 @@ export const InventoryMovementDetailPage: React.FC<{
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
+    const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'date', direction: 'desc' });
     const [editingMovement, setEditingMovement] = useState<InventoryMovement | null>(null);
     const [editForm, setEditForm] = useState({ quantity: 0, price: 0, notes: '', date: '' });
     const [yearFilter, setYearFilter] = useState<number>(initialYear || new Date().getFullYear());
@@ -1122,13 +1207,49 @@ export const InventoryMovementDetailPage: React.FC<{
     };
 
     const filteredMovements = useMemo(() => {
-        return movements.filter(m => {
+        let result = movements.filter(m => {
             const matchesYear = new Date(m.date).getFullYear() === yearFilter;
             const matchesType = typeFilter === 'all' || m.type === typeFilter;
             const matchesSearch = !searchTerm || m.notes?.toLowerCase().includes(searchTerm.toLowerCase());
             return matchesYear && matchesType && matchesSearch;
         });
-    }, [movements, yearFilter, typeFilter, searchTerm]);
+
+        if (sortConfig) {
+            result.sort((a, b) => {
+                let aValue: any;
+                let bValue: any;
+
+                switch (sortConfig.key) {
+                    case 'date': aValue = new Date(a.date).getTime(); bValue = new Date(b.date).getTime(); break;
+                    case 'type': aValue = a.type; bValue = b.type; break;
+                    case 'quantity': aValue = a.quantity; bValue = b.quantity; break;
+                    case 'price': aValue = a.price || 0; bValue = b.price || 0; break;
+                    default: return 0;
+                }
+
+                if (typeof aValue === 'string' && typeof bValue === 'string') {
+                    return sortConfig.direction === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+                } else if (typeof aValue === 'number' && typeof bValue === 'number') {
+                    return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
+                }
+                return 0;
+            });
+        }
+        return result;
+    }, [movements, yearFilter, typeFilter, searchTerm, sortConfig]);
+
+    const requestSort = (key: string) => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const getSortIndicator = (key: string) => {
+        if (!sortConfig || sortConfig.key !== key) return null;
+        return sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 ml-1" /> : <ArrowDown className="w-3 h-3 ml-1" />;
+    };
 
     const totalPages = Math.ceil(filteredMovements.length / itemsPerPage);
     const currentMovements = filteredMovements.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -1183,10 +1304,18 @@ export const InventoryMovementDetailPage: React.FC<{
                     <table className="w-full text-left text-sm border-collapse">
                         <thead>
                             <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
-                                <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white">Fecha</th>
-                                <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white">Tipo</th>
-                                <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-right">Cantidad</th>
-                                <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-right">Precio/Costo</th>
+                                <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestSort('date')}>
+                                    <div className="flex items-center">Fecha {getSortIndicator('date')}</div>
+                                </th>
+                                <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestSort('type')}>
+                                    <div className="flex items-center">Tipo {getSortIndicator('type')}</div>
+                                </th>
+                                <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestSort('quantity')}>
+                                    <div className="flex items-center justify-end">Cantidad {getSortIndicator('quantity')}</div>
+                                </th>
+                                <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestSort('price')}>
+                                    <div className="flex items-center justify-end">Precio/Costo {getSortIndicator('price')}</div>
+                                </th>
                                 <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white">Notas</th>
                                 <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-right">Acciones</th>
                             </tr>
@@ -1242,11 +1371,11 @@ export const InventoryMovementDetailPage: React.FC<{
                 {totalPages > 1 && (
                     <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
                         <div className="text-sm text-gray-600 dark:text-gray-400">
-                            Página <span className="font-medium">{currentPage}</span> de <span className="font-medium">{totalPages}</span>
+                             Mostrando <span className="font-medium">{((currentPage - 1) * itemsPerPage) + 1}</span> a <span className="font-medium">{Math.min(currentPage * itemsPerPage, filteredMovements.length)}</span> de <span className="font-medium">{filteredMovements.length}</span>
                         </div>
                         <div className="flex space-x-2">
-                            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm disabled:opacity-50">Anterior</button>
-                            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm disabled:opacity-50">Siguiente</button>
+                             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Anterior</button>
+                             <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Siguiente</button>
                         </div>
                     </div>
                 )}

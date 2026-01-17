@@ -57,6 +57,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ clients,
   const today = new Date();
   const [retentionSearch, setRetentionSearch] = useState('');
   const [retentionSortConfig, setRetentionSortConfig] = useState<SortConfig>(null);
+  const [retentionCurrentPage, setRetentionCurrentPage] = useState(1);
+  const retentionItemsPerPage = 10;
 
   const isBillable = (statusId: string) => statuses.find(s => s.id === statusId)?.isBillable || false;
 
@@ -140,7 +142,17 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ clients,
     let direction: 'asc' | 'desc' = 'asc';
     if (retentionSortConfig && retentionSortConfig.key === key && retentionSortConfig.direction === 'asc') direction = 'desc';
     setRetentionSortConfig({ key, direction });
+    setRetentionCurrentPage(1);
   };
+
+  const activeRetentionMetrics = useMemo(() => {
+    return filteredMetrics.filter(m => m.status !== 'ontime');
+  }, [filteredMetrics]);
+
+  const retentionTotalPages = Math.ceil(activeRetentionMetrics.length / retentionItemsPerPage);
+  const retentionIndexOfLastItem = retentionCurrentPage * retentionItemsPerPage;
+  const retentionIndexOfFirstItem = retentionIndexOfLastItem - retentionItemsPerPage;
+  const currentRetentionMetrics = activeRetentionMetrics.slice(retentionIndexOfFirstItem, retentionIndexOfLastItem);
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -184,7 +196,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ clients,
                 <div className="flex flex-wrap justify-between items-center mb-4 gap-3">
                     <h3 className="text-lg font-semibold flex items-center text-gray-900 dark:text-white"><AlertTriangle className="w-5 h-5 text-red-500 mr-2" /> Atención Requerida</h3>
                     <div className="relative flex-1 sm:min-w-[180px]">
-                        <input type="text" placeholder="Buscar..." value={retentionSearch} onChange={(e) => setRetentionSearch(e.target.value)} className="pl-8 pr-3 py-1.5 text-sm border rounded-md bg-white dark:bg-gray-700 dark:text-white border-gray-300 dark:border-gray-600 w-full focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"/>
+                        <input type="text" placeholder="Buscar..." value={retentionSearch} onChange={(e) => { setRetentionSearch(e.target.value); setRetentionCurrentPage(1); }} className="pl-8 pr-3 py-1.5 text-sm border rounded-md bg-white dark:bg-gray-700 dark:text-white border-gray-300 dark:border-gray-600 w-full focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"/>
                         <Search className="w-4 h-4 text-gray-500 absolute left-2 top-2.5"/>
                     </div>
                 </div>
@@ -199,7 +211,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ clients,
                              </tr>
                          </thead>
                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                            {filteredMetrics.filter(m => m.status !== 'ontime').map(metric => (
+                            {currentRetentionMetrics.map(metric => (
                                 <tr key={metric.clientId} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                     <td className="px-3 py-2 text-sm font-medium"><button onClick={() => onViewClient(metric.clientId)} className="hover:text-teal-600 dark:text-gray-200 dark:hover:text-teal-400">{metric.clientName}</button></td>
                                     <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">{metric.lastServiceName}</td>
@@ -214,6 +226,17 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ clients,
                         </tbody>
                     </table>
                 </div>
+                {retentionTotalPages > 1 && (
+                    <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
+                        <div className="text-[10px] text-gray-500">
+                            Mostrando <span className="font-medium">{retentionIndexOfFirstItem + 1}</span> a <span className="font-medium">{Math.min(retentionIndexOfLastItem, activeRetentionMetrics.length)}</span> de <span className="font-medium">{activeRetentionMetrics.length}</span>
+                        </div>
+                        <div className="flex space-x-1">
+                            <button onClick={() => setRetentionCurrentPage(p => Math.max(1, p - 1))} disabled={retentionCurrentPage === 1} className="px-2 py-0.5 border border-gray-300 dark:border-gray-600 rounded text-[10px] disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700">Ant.</button>
+                            <button onClick={() => setRetentionCurrentPage(p => Math.min(retentionTotalPages, p + 1))} disabled={retentionCurrentPage === retentionTotalPages} className="px-2 py-0.5 border border-gray-300 dark:border-gray-600 rounded text-[10px] disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700">Sig.</button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
         </div>
@@ -229,6 +252,10 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
     const [clientSearch, setClientSearch] = useState('');
     const [teamSortConfig, setTeamSortConfig] = useState<SortConfig>(null);
     const [clientFinancialsSortConfig, setClientFinancialsSortConfig] = useState<SortConfig>(null);
+    const [teamCurrentPage, setTeamCurrentPage] = useState(1);
+    const [clientCurrentPage, setClientCurrentPage] = useState(1);
+    const [inventoryCurrentPage, setInventoryCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     const handlePrev = () => {
         if (period === 'week') setCurrentDate(addWeeks(currentDate, -1));
@@ -371,11 +398,17 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
         })).sort((a, b) => {
             if (!teamSortConfig) return b.profit - a.profit;
             const { key, direction } = teamSortConfig;
-            const valA = (a as any)[key];
-            const valB = (b as any)[key];
+            let valA = (a as any)[key];
+            let valB = (b as any)[key];
+            if (typeof valA === 'string') return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
             return direction === 'asc' ? valA - valB : valB - valA;
         });
     }, [filteredAppointments, staff, statuses, inventory, teamSortConfig]);
+
+    const teamTotalPages = Math.ceil(teamMetrics.length / itemsPerPage);
+    const teamIndexOfLastItem = teamCurrentPage * itemsPerPage;
+    const teamIndexOfFirstItem = teamIndexOfLastItem - itemsPerPage;
+    const currentTeamMetrics = teamMetrics.slice(teamIndexOfFirstItem, teamIndexOfLastItem);
 
     const clientFinancials = useMemo(() => {
         const financials: Record<string, { id: string, name: string, email: string, appointments: number, revenue: number, pending: number }> = {};
@@ -420,6 +453,11 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
                 return direction === 'asc' ? valA - valB : valB - valA;
             });
     }, [filteredAppointments, clients, statuses, clientSearch, clientFinancialsSortConfig]);
+
+    const clientTotalPages = Math.ceil(clientFinancials.length / itemsPerPage);
+    const clientIndexOfLastItem = clientCurrentPage * itemsPerPage;
+    const clientIndexOfFirstItem = clientIndexOfLastItem - itemsPerPage;
+    const currentClientFinancials = clientFinancials.slice(clientIndexOfFirstItem, clientIndexOfLastItem);
 
     const [allMovements, setAllMovements] = useState<InventoryMovement[]>([]);
     
@@ -478,11 +516,17 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
         };
     }, [allMovements, inventory, dateRange]);
 
+    const inventoryTotalPages = Math.ceil(inventoryFinancialMetrics.breakdown.length / itemsPerPage);
+    const inventoryIndexOfLastItem = inventoryCurrentPage * itemsPerPage;
+    const inventoryIndexOfFirstItem = inventoryIndexOfLastItem - itemsPerPage;
+    const currentInventoryBreakdown = inventoryFinancialMetrics.breakdown.slice(inventoryIndexOfFirstItem, inventoryIndexOfLastItem);
+
     const requestTeamSort = (key: string) => {
         setTeamSortConfig(prev => ({
             key,
             direction: prev?.key === key && prev?.direction === 'asc' ? 'desc' : 'asc'
         }));
+        setTeamCurrentPage(1);
     };
 
     const requestClientSort = (key: string) => {
@@ -490,6 +534,7 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
             key,
             direction: prev?.key === key && prev?.direction === 'asc' ? 'desc' : 'asc'
         }));
+        setClientCurrentPage(1);
     };
 
     return (
@@ -503,7 +548,7 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
                     <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
                         <div className="bg-white dark:bg-gray-800 p-1 rounded-lg border border-gray-200 dark:border-gray-700 flex">
                             {['week', 'month', 'year', 'all'].map(val => (
-                                <button key={val} onClick={() => setPeriod(val as any)} className={`px-3 py-1.5 text-sm rounded-md transition-colors ${period === val ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400 font-medium' : 'text-gray-600 dark:text-gray-400 hover:text-teal-600'}`}>
+                                <button key={val} onClick={() => { setPeriod(val as any); setTeamCurrentPage(1); setClientCurrentPage(1); setInventoryCurrentPage(1); }} className={`px-3 py-1.5 text-sm rounded-md transition-colors ${period === val ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400 font-medium' : 'text-gray-600 dark:text-gray-400 hover:text-teal-600'}`}>
                                     {val === 'week' ? 'Semana' : val === 'month' ? 'Mes' : val === 'year' ? 'Año' : 'Todo'}
                                 </button>
                             ))}
@@ -612,16 +657,28 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
                                 <table className="w-full text-left text-sm">
                                     <thead>
                                         <tr className="bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
-                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400">Miembro</th>
-                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-center">Citas</th>
-                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-center">Horas</th>
-                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-right">Ingresos</th>
-                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-right">Coste</th>
-                                            <th className="px-6 py-3 font-semibold text-teal-600 dark:text-teal-400 text-right">Beneficio</th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestTeamSort('name')}>
+                                                <div className="flex items-center">Miembro {teamSortConfig?.key === 'name' && (teamSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 ml-1"/> : <ArrowDown className="w-3 h-3 ml-1"/>)}</div>
+                                            </th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestTeamSort('count')}>
+                                                <div className="flex items-center justify-center">Citas {teamSortConfig?.key === 'count' && (teamSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 ml-1"/> : <ArrowDown className="w-3 h-3 ml-1"/>)}</div>
+                                            </th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestTeamSort('hours')}>
+                                                <div className="flex items-center justify-center">Horas {teamSortConfig?.key === 'hours' && (teamSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 ml-1"/> : <ArrowDown className="w-3 h-3 ml-1"/>)}</div>
+                                            </th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestTeamSort('revenue')}>
+                                                <div className="flex items-center justify-end">Ingresos {teamSortConfig?.key === 'revenue' && (teamSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 ml-1"/> : <ArrowDown className="w-3 h-3 ml-1"/>)}</div>
+                                            </th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestTeamSort('cost')}>
+                                                <div className="flex items-center justify-end">Coste {teamSortConfig?.key === 'cost' && (teamSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 ml-1"/> : <ArrowDown className="w-3 h-3 ml-1"/>)}</div>
+                                            </th>
+                                            <th className="px-6 py-3 font-semibold text-teal-600 dark:text-teal-400 text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestTeamSort('profit')}>
+                                                <div className="flex items-center justify-end">Beneficio {teamSortConfig?.key === 'profit' && (teamSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 ml-1"/> : <ArrowDown className="w-3 h-3 ml-1"/>)}</div>
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                        {teamMetrics.map(m => (
+                                        {currentTeamMetrics.map(m => (
                                             <tr key={m.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                                 <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{m.name}</td>
                                                 <td className="px-6 py-4 text-center text-gray-700 dark:text-gray-300">{m.count}</td>
@@ -634,6 +691,17 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
                                     </tbody>
                                 </table>
                             </div>
+                            {teamTotalPages > 1 && (
+                                <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
+                                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                                        Mostrando <span className="font-medium">{teamIndexOfFirstItem + 1}</span> a <span className="font-medium">{Math.min(teamIndexOfLastItem, teamMetrics.length)}</span> de <span className="font-medium">{teamMetrics.length}</span>
+                                    </div>
+                                    <div className="flex space-x-2">
+                                        <button onClick={() => setTeamCurrentPage(p => Math.max(1, p - 1))} disabled={teamCurrentPage === 1} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Anterior</button>
+                                        <button onClick={() => setTeamCurrentPage(p => Math.min(teamTotalPages, p + 1))} disabled={teamCurrentPage === teamTotalPages} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Siguiente</button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -650,7 +718,7 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
                                         placeholder="Buscar cliente, email o t..."
                                         className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
                                         value={clientSearch}
-                                        onChange={e => setClientSearch(e.target.value)}
+                                        onChange={e => { setClientSearch(e.target.value); setClientCurrentPage(1); }}
                                     />
                                 </div>
                             </div>
@@ -658,14 +726,22 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
                                 <table className="w-full text-left text-sm">
                                     <thead>
                                         <tr className="bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
-                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 cursor-pointer hover:text-teal-600" onClick={() => requestClientSort('name')}>CLIENTE</th>
-                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-center cursor-pointer hover:text-teal-600" onClick={() => requestClientSort('appointments')}>CITAS</th>
-                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-right cursor-pointer hover:text-teal-600" onClick={() => requestClientSort('revenue')}>REALIZADO (COBRADO)</th>
-                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-right cursor-pointer hover:text-teal-600" onClick={() => requestClientSort('pending')}>FUTURO (PENDIENTE)</th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestClientSort('name')}>
+                                                <div className="flex items-center">CLIENTE {clientFinancialsSortConfig?.key === 'name' && (clientFinancialsSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 ml-1"/> : <ArrowDown className="w-3 h-3 ml-1"/>)}</div>
+                                            </th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestClientSort('appointments')}>
+                                                <div className="flex items-center justify-center">CITAS {clientFinancialsSortConfig?.key === 'appointments' && (clientFinancialsSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 ml-1"/> : <ArrowDown className="w-3 h-3 ml-1"/>)}</div>
+                                            </th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestClientSort('revenue')}>
+                                                <div className="flex items-center justify-end text-[10px] leading-tight text-left">REALIZADO<br/>(COBRADO) {clientFinancialsSortConfig?.key === 'revenue' && (clientFinancialsSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 ml-1"/> : <ArrowDown className="w-3 h-3 ml-1"/>)}</div>
+                                            </th>
+                                            <th className="px-6 py-3 font-medium text-gray-600 dark:text-gray-400 text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => requestClientSort('pending')}>
+                                                <div className="flex items-center justify-end text-[10px] leading-tight text-left">FUTURO<br/>(PENDIENTE) {clientFinancialsSortConfig?.key === 'pending' && (clientFinancialsSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 ml-1"/> : <ArrowDown className="w-3 h-3 ml-1"/>)}</div>
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                        {clientFinancials.map(c => (
+                                        {currentClientFinancials.map(c => (
                                             <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer" onClick={() => onViewClient(c.id)}>
                                                 <td className="px-6 py-4">
                                                     <div className="font-medium text-gray-900 dark:text-white">{c.name}</div>
@@ -684,6 +760,17 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
                                     </tbody>
                                 </table>
                             </div>
+                            {clientTotalPages > 1 && (
+                                <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
+                                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                                        Mostrando <span className="font-medium">{clientIndexOfFirstItem + 1}</span> a <span className="font-medium">{Math.min(clientIndexOfLastItem, clientFinancials.length)}</span> de <span className="font-medium">{clientFinancials.length}</span>
+                                    </div>
+                                    <div className="flex space-x-2">
+                                        <button onClick={() => setClientCurrentPage(p => Math.max(1, p - 1))} disabled={clientCurrentPage === 1} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Anterior</button>
+                                        <button onClick={() => setClientCurrentPage(p => Math.min(clientTotalPages, p + 1))} disabled={clientCurrentPage === clientTotalPages} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Siguiente</button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -744,7 +831,7 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                        {inventoryFinancialMetrics.breakdown.map((p, idx) => (
+                                        {currentInventoryBreakdown.map((p, idx) => (
                                             <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                                 <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{p.name}</td>
                                                 <td className="px-6 py-4 text-center text-red-500">{formatCurrency(p.bought)}</td>
@@ -756,6 +843,17 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
                                     </tbody>
                                 </table>
                             </div>
+                            {inventoryTotalPages > 1 && (
+                                <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
+                                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                                        Mostrando <span className="font-medium">{inventoryIndexOfFirstItem + 1}</span> a <span className="font-medium">{Math.min(inventoryIndexOfLastItem, inventoryFinancialMetrics.breakdown.length)}</span> de <span className="font-medium">{inventoryFinancialMetrics.breakdown.length}</span>
+                                    </div>
+                                    <div className="flex space-x-2">
+                                        <button onClick={() => setInventoryCurrentPage(p => Math.max(1, p - 1))} disabled={inventoryCurrentPage === 1} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Anterior</button>
+                                        <button onClick={() => setInventoryCurrentPage(p => Math.min(inventoryTotalPages, p + 1))} disabled={inventoryCurrentPage === inventoryTotalPages} className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Siguiente</button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

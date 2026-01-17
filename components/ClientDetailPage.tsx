@@ -6,7 +6,7 @@ import { es } from 'date-fns/locale';
 import { 
     ArrowLeft, Mail, Phone, Calendar as CalendarIcon, Edit2, 
     EyeOff, Eye, Lightbulb, Plus, TrendingUp, Receipt, 
-    Clock, History, Star, XCircle, CheckSquare, RotateCcw, PieChart as PieChartIcon
+    Clock, History, Star, XCircle, CheckSquare, RotateCcw, PieChart as PieChartIcon, Search, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
@@ -53,6 +53,11 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
 }) => {
     const [appointmentFilter, setAppointmentFilter] = useState<'upcoming' | 'history'>('upcoming');
     const [serviceFilter, setServiceFilter] = useState<string>('all');
+    const [aptSearch, setAptSearch] = useState('');
+    const [treatmentSearch, setTreatmentSearch] = useState('');
+    const [aptCurrentPage, setAptCurrentPage] = useState(1);
+    const [treatmentCurrentPage, setTreatmentCurrentPage] = useState(1);
+    const itemsPerPage = 8;
 
     // --- 1. Data Aggregation & Metrics ---
 
@@ -68,12 +73,35 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
     }, [clientAppointments, services]);
     
     const today = new Date();
-    const upcomingAppointments = clientAppointments
-        .filter(apt => (isFuture(new Date(apt.date)) || isSameDay(new Date(apt.date), today)) && (serviceFilter === 'all' || apt.serviceTypeId === serviceFilter))
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Asc for upcoming
+    
+    const filteredAppointments = useMemo(() => {
+        let base = (appointmentFilter === 'upcoming') 
+            ? clientAppointments.filter(apt => (isFuture(new Date(apt.date)) || isSameDay(new Date(apt.date), today)))
+            : clientAppointments.filter(apt => isPast(new Date(apt.date)) && !isSameDay(new Date(apt.date), today));
+        
+        if (serviceFilter !== 'all') {
+            base = base.filter(apt => apt.serviceTypeId === serviceFilter);
+        }
 
-    const pastAppointments = clientAppointments
-        .filter(apt => isPast(new Date(apt.date)) && !isSameDay(new Date(apt.date), today) && (serviceFilter === 'all' || apt.serviceTypeId === serviceFilter)); // Desc for history (already sorted)
+        if (aptSearch) {
+            const lowerSearch = aptSearch.toLowerCase();
+            base = base.filter(apt => {
+                const service = services.find(s => s.id === apt.serviceTypeId);
+                const staffMember = staff.find(s => s.id === apt.staffId);
+                return (service?.name.toLowerCase().includes(lowerSearch) || 
+                        staffMember?.name.toLowerCase().includes(lowerSearch));
+            });
+        }
+
+        if (appointmentFilter === 'upcoming') {
+            base.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        }
+
+        return base;
+    }, [clientAppointments, appointmentFilter, serviceFilter, aptSearch, services, staff, today]);
+
+    const aptTotalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
+    const currentApts = filteredAppointments.slice((aptCurrentPage - 1) * itemsPerPage, aptCurrentPage * itemsPerPage);
 
     const stats = useMemo(() => {
         let totalSpent = 0;
@@ -81,7 +109,10 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
         let cancelledCount = 0;
         let lastVisitDate: Date | null = null;
 
-        pastAppointments.forEach(apt => {
+        // Use all past appointments for stats, not filtered ones
+        const allPast = clientAppointments.filter(apt => isPast(new Date(apt.date)) && !isSameDay(new Date(apt.date), today));
+
+        allPast.forEach(apt => {
             const status = statuses.find(s => s.id === apt.statusId);
             if (!status) return;
 
@@ -102,13 +133,13 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
             lastVisitDate,
             averageTicket: completedCount > 0 ? totalSpent / completedCount : 0
         };
-    }, [pastAppointments, statuses]);
+    }, [clientAppointments, statuses, today]);
 
     // Breakdown by Treatment Type - NEW LOGIC
     const treatmentBreakdown = useMemo(() => {
         const uniqueServiceIds = new Set(clientAppointments.map(apt => apt.serviceTypeId));
         
-        const breakdown = Array.from(uniqueServiceIds).map(serviceId => {
+        let breakdown = Array.from(uniqueServiceIds).map(serviceId => {
             const service = services.find(s => s.id === serviceId);
             const billableAptsForService = clientAppointments.filter(apt => 
                 apt.serviceTypeId === serviceId && isBillable(apt.statusId, statuses)
@@ -125,8 +156,18 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
             };
         });
 
-        return breakdown.filter(b => b.count > 0).sort((a, b) => b.revenue - a.revenue);
-    }, [clientAppointments, statuses, services]);
+        breakdown = breakdown.filter(b => b.count > 0);
+
+        if (treatmentSearch) {
+            const lower = treatmentSearch.toLowerCase();
+            breakdown = breakdown.filter(b => b.name.toLowerCase().includes(lower));
+        }
+
+        return breakdown.sort((a, b) => b.revenue - a.revenue);
+    }, [clientAppointments, statuses, services, treatmentSearch]);
+
+    const treatmentTotalPages = Math.ceil(treatmentBreakdown.length / 5); // Sidebar fits fewer items
+    const currentTreatments = treatmentBreakdown.slice((treatmentCurrentPage - 1) * 5, treatmentCurrentPage * 5);
 
     // Futurible Calculation
     const futuribleAppointments = useMemo(() => {
@@ -155,13 +196,13 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
             const recommendedDate = addDays(lastAptDate, service.recurrenceDays);
 
             // Check if there is already an upcoming appointment for this service
-            const hasUpcoming = upcomingAppointments.some(upcomingApt =>
+            const hasUpcoming = clientAppointments.some(upcomingApt =>
                 upcomingApt.serviceTypeId === service.id &&
-                !isSameDay(new Date(upcomingApt.date), recommendedDate)
+                (isFuture(new Date(upcomingApt.date)) || isSameDay(new Date(upcomingApt.date), today))
             );
 
             // Only recommend if the date is in the future (or today) and not already booked
-            if (!hasUpcoming && (isFuture(recommendedDate) || isSameDay(new Date(), recommendedDate))) {
+            if (!hasUpcoming && (isFuture(recommendedDate) || isSameDay(today, recommendedDate))) {
                 recommendations.push({
                     service,
                     recommendedDate,
@@ -173,7 +214,7 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
         });
 
         return recommendations.sort((a, b) => a.recommendedDate.getTime() - b.recommendedDate.getTime());
-    }, [clientAppointments, upcomingAppointments, services, statuses, client.discountPercentage, client.finishedTreatments, calculateFinalPrice]);
+    }, [clientAppointments, services, statuses, client.discountPercentage, client.finishedTreatments, calculateFinalPrice, today]);
 
 
     return (
@@ -252,43 +293,56 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
                 <div className="lg:col-span-2 space-y-6">
                     
                     {/* Appointments Card */}
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden min-h-[400px] flex flex-col">
-                        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                            <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
-                                <CalendarIcon className="w-5 h-5 mr-2 text-teal-600" /> Citas
-                            </h2>
-                            <div className="flex items-center gap-2">
+                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden min-h-[400px] flex flex-col">
+                        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col gap-4 bg-gray-50/50 dark:bg-gray-800/50">
+                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+                                    <CalendarIcon className="w-5 h-5 mr-2 text-teal-600" /> Citas
+                                </h2>
+                                <div className="flex items-center gap-2">
+                                    <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+                                        <button 
+                                            onClick={() => { setAppointmentFilter('upcoming'); setAptCurrentPage(1); }}
+                                            className={`px-3 py-1 text-xs rounded-md transition-all ${appointmentFilter === 'upcoming' ? 'bg-white dark:bg-gray-600 shadow text-teal-600 dark:text-teal-300 font-semibold' : 'text-gray-600 dark:text-gray-300'}`}
+                                        >
+                                            Próximas
+                                        </button>
+                                        <button 
+                                            onClick={() => { setAppointmentFilter('history'); setAptCurrentPage(1); }}
+                                            className={`px-3 py-1 text-xs rounded-md transition-all ${appointmentFilter === 'history' ? 'bg-white dark:bg-gray-600 shadow text-teal-600 dark:text-teal-300 font-semibold' : 'text-gray-600 dark:text-gray-300'}`}
+                                        >
+                                            Historial
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <div className="relative flex-1">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar tratamiento o especialista..."
+                                        className="w-full pl-9 pr-4 py-1.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-xs focus:ring-2 focus:ring-teal-500 outline-none"
+                                        value={aptSearch}
+                                        onChange={e => { setAptSearch(e.target.value); setAptCurrentPage(1); }}
+                                    />
+                                </div>
                                 {clientUniqueServices.length > 1 && (
                                     <select 
                                         value={serviceFilter}
-                                        onChange={(e) => setServiceFilter(e.target.value)}
+                                        onChange={(e) => { setServiceFilter(e.target.value); setAptCurrentPage(1); }}
                                         className="text-xs p-1.5 border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-white shadow-sm focus:ring-teal-500 focus:border-teal-500"
                                     >
                                         <option value="all">Todos los tratamientos</option>
                                         {clientUniqueServices.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                     </select>
                                 )}
-                                <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
-                                    <button 
-                                        onClick={() => setAppointmentFilter('upcoming')}
-                                        className={`px-3 py-1 text-xs rounded-md transition-all ${appointmentFilter === 'upcoming' ? 'bg-white dark:bg-gray-600 shadow text-teal-600 dark:text-teal-300 font-semibold' : 'text-gray-600 dark:text-gray-300'}`}
-                                    >
-                                        Próximas ({upcomingAppointments.length})
-                                    </button>
-                                    <button 
-                                        onClick={() => setAppointmentFilter('history')}
-                                        className={`px-3 py-1 text-xs rounded-md transition-all ${appointmentFilter === 'history' ? 'bg-white dark:bg-gray-600 shadow text-teal-600 dark:text-teal-300 font-semibold' : 'text-gray-600 dark:text-gray-300'}`}
-                                    >
-                                        Historial
-                                    </button>
-                                </div>
                             </div>
                         </div>
-
                         <div className="flex-1 overflow-y-auto max-h-[500px] p-2">
-                            {(appointmentFilter === 'upcoming' ? upcomingAppointments : pastAppointments).length > 0 ? (
+                            {currentApts.length > 0 ? (
                                 <div className="space-y-2">
-                                    {(appointmentFilter === 'upcoming' ? upcomingAppointments : pastAppointments).map(apt => {
+                                    {currentApts.map(apt => {
                                         const service = services.find(s => s.id === apt.serviceTypeId);
                                         const status = statuses.find(s => s.id === apt.statusId);
                                         const staffMember = staff.find(s => s.id === apt.staffId);
@@ -306,9 +360,9 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
                                             >
                                                 <div className="flex items-start gap-3">
                                                     <div className="flex flex-col items-center min-w-[3.5rem] border-r border-gray-200 dark:border-gray-600 pr-3 py-1">
-                                                        <span className="text-xs uppercase font-bold text-gray-500 dark:text-gray-400">{format(new Date(apt.date), 'MMM', {locale: es})}</span>
+                                                        <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">{format(new Date(apt.date), 'MMM', {locale: es})}</span>
                                                         <span className="text-xl font-bold text-gray-800 dark:text-white">{format(new Date(apt.date), 'd')}</span>
-                                                        <span className="text-xs text-gray-500 dark:text-gray-400">{format(new Date(apt.date), 'yyyy')}</span>
+                                                        <span className="text-[10px] text-gray-500 dark:text-gray-400">{format(new Date(apt.date), 'yyyy')}</span>
                                                     </div>
                                                     <div>
                                                         <div className="font-semibold text-gray-900 dark:text-white text-sm flex items-center gap-2">
@@ -351,6 +405,17 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
                                 </div>
                             )}
                         </div>
+                        {aptTotalPages > 1 && (
+                            <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/30">
+                                <div className="text-[10px] text-gray-600 dark:text-gray-400">
+                                    Mostrando <span className="font-medium">{(aptCurrentPage - 1) * itemsPerPage + 1}</span> a <span className="font-medium">{Math.min(aptCurrentPage * itemsPerPage, filteredAppointments.length)}</span> de <span className="font-medium">{filteredAppointments.length}</span>
+                                </div>
+                                <div className="flex space-x-1">
+                                    <button onClick={() => setAptCurrentPage(p => Math.max(1, p - 1))} disabled={aptCurrentPage === 1} className="p-1 px-2 border border-gray-300 dark:border-gray-600 rounded text-[10px] disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700">Ant.</button>
+                                    <button onClick={() => setAptCurrentPage(p => Math.min(aptTotalPages, p + 1))} disabled={aptCurrentPage === aptTotalPages} className="p-1 px-2 border border-gray-300 dark:border-gray-600 rounded text-[10px] disabled:opacity-50 hover:bg-white dark:hover:bg-gray-700">Sig.</button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -389,16 +454,26 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
                     )}
 
                     {/* 3. Treatment Breakdown */}
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
+                        <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 space-y-3">
                             <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center">
                                 <Star className="w-4 h-4 mr-2 text-purple-500" /> Tratamientos
                             </h3>
+                            <div className="relative">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar..."
+                                    className="w-full pl-7 pr-3 py-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-[10px] focus:ring-1 focus:ring-teal-500 outline-none"
+                                    value={treatmentSearch}
+                                    onChange={e => { setTreatmentSearch(e.target.value); setTreatmentCurrentPage(1); }}
+                                />
+                            </div>
                         </div>
-                        <div className="p-2">
-                            {treatmentBreakdown.length > 0 ? (
+                        <div className="p-2 flex-1">
+                            {currentTreatments.length > 0 ? (
                                 <div className="space-y-1">
-                                    {treatmentBreakdown.map((item, idx) => {
+                                    {currentTreatments.map((item, idx) => {
                                         const isFinished = client.finishedTreatments?.includes(item.serviceId);
                                         return (
                                         <div key={idx} className={`flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded transition-all ${isFinished ? 'opacity-60' : ''}`}>
@@ -430,9 +505,20 @@ export const ClientDetailPage: React.FC<ClientDetailPageProps> = ({
                                     )})}
                                 </div>
                             ) : (
-                                <p className="p-4 text-xs text-gray-500 text-center">Sin datos de tratamientos previos.</p>
+                                <p className="p-4 text-xs text-gray-500 text-center">Sin datos.</p>
                             )}
                         </div>
+                        {treatmentTotalPages > 1 && (
+                            <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/30">
+                                <div className="text-[10px] text-gray-600 dark:text-gray-400">
+                                    {treatmentCurrentPage} de {treatmentTotalPages}
+                                </div>
+                                <div className="flex space-x-1">
+                                    <button onClick={() => setTreatmentCurrentPage(p => Math.max(1, p - 1))} disabled={treatmentCurrentPage === 1} className="p-1 border border-gray-300 dark:border-gray-600 rounded text-[10px] disabled:opacity-50">Ant.</button>
+                                    <button onClick={() => setTreatmentCurrentPage(p => Math.min(treatmentTotalPages, p + 1))} disabled={treatmentCurrentPage === treatmentTotalPages} className="p-1 border border-gray-300 dark:border-gray-600 rounded text-[10px] disabled:opacity-50">Sig.</button>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     
