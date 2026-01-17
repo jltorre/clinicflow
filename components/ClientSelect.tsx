@@ -57,8 +57,8 @@ export const ClientSelect: React.FC<ClientSelectProps> = ({
 
   const filteredClients = useMemo(() => {
     return clients.filter(c => 
-        c.name.toLowerCase().includes(search.toLowerCase()) || 
-        c.email.toLowerCase().includes(search.toLowerCase())
+        (c.name || '').toLowerCase().includes(search.toLowerCase()) || 
+        (c.email || '').toLowerCase().includes(search.toLowerCase())
     );
   }, [clients, search]);
 

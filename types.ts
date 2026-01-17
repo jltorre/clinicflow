@@ -41,6 +41,14 @@ export interface ServiceType {
   upcomingThresholdDays?: number; // Days before recurrence date to start showing as "upcoming"
 }
 
+export interface AppointmentServiceItem {
+  instanceId?: string; // Unique ID for this specific item instance in the appointment (optional for backward compatibility)
+  serviceId: string;
+  name: string;
+  unitPrice: number;
+  durationMinutes: number;
+}
+
 export interface Appointment {
   id: string;
   clientId: string;
@@ -58,6 +66,7 @@ export interface Appointment {
   notes?: string; // New field: notes for the appointment
   inventoryItems?: AppointmentInventorySale[]; // Items sold during the appointment
   inventoryTotal?: number; // Total amount from inventory items
+  serviceItems?: AppointmentServiceItem[]; // NEW: Multiple services per appointment
 }
 
 export interface InventoryItem {
@@ -117,6 +126,7 @@ export interface AppSettings {
   defaultBookingFee: number; // NEW: Global setting for booking fee
   defaultCalendarView?: 'list' | 'day' | 'week' | 'month'; // NEW: Default view for the calendar
   theme?: 'light' | 'dark' | 'system'; // NEW: Theme setting
+  timeFormat?: '12h' | '24h'; // NEW: 12h (am/pm) or 24h format
 }
 
 // User Profile Type

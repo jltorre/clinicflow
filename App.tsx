@@ -35,11 +35,11 @@ interface Toast {
     type: 'success' | 'error' | 'info';
 }
 
-const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode }> = ({ isOpen, onClose, title, children }) => {
+const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode; maxWidth?: string }> = ({ isOpen, onClose, title, children, maxWidth = 'max-w-md' }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-0 md:p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-t-2xl md:rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-fade-in-up border border-gray-200 dark:border-gray-700 max-h-[90vh] flex flex-col">
+      <div className={`bg-white dark:bg-gray-800 rounded-t-2xl md:rounded-lg shadow-xl w-full ${maxWidth} overflow-hidden animate-fade-in-up border border-gray-200 dark:border-gray-700 max-h-[90vh] flex flex-col`}>
         <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">{title}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
@@ -342,6 +342,28 @@ const App: React.FC = () => {
       const totalMinutes = h * 60 + m + apt.durationMinutes;
       const endH = Math.floor(totalMinutes / 60);
       const endM = totalMinutes % 60;
+      
+      // Migrate old appointments to serviceItems format
+      let serviceItems = apt.serviceItems;
+      if (!serviceItems || serviceItems.length === 0) {
+          const service = services.find(s => s.id === apt.serviceTypeId);
+          if (service) {
+              serviceItems = [{
+                  instanceId: `srv-${Date.now()}`,
+                  serviceId: apt.serviceTypeId,
+                  name: service.name,
+                  unitPrice: apt.basePrice,
+                  durationMinutes: apt.durationMinutes
+              }];
+          }
+      } else {
+          // Ensure existing items have instanceId
+          serviceItems = serviceItems.map(item => ({
+              ...item,
+              instanceId: item.instanceId || `srv-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+          }));
+      }
+      
       setAptForm({ 
           ...apt, 
           endTime: `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`,
@@ -350,7 +372,8 @@ const App: React.FC = () => {
           price: apt.price,
           bookingFeePaid: apt.bookingFeePaid || false,
           bookingFeeAmount: apt.bookingFeeAmount ?? settings.defaultBookingFee,
-          notes: apt.notes || ''
+          notes: apt.notes || '',
+          serviceItems: serviceItems
       });
     } else {
       setEditingApt(null);
@@ -362,6 +385,15 @@ const App: React.FC = () => {
 
       const defaultService = options?.serviceTypeId ? services.find(s => s.id === options.serviceTypeId) : null;
       const defaultClient = options?.clientId ? clients.find(c => c.id === options.clientId) : null;
+
+      // Initialize serviceItems if a default service is provided
+      const initialServiceItems = defaultService ? [{
+          instanceId: `srv-${Date.now()}`,
+          serviceId: defaultService.id,
+          name: defaultService.name,
+          unitPrice: defaultService.defaultPrice,
+          durationMinutes: defaultService.defaultDuration
+      }] : [];
 
       const defaultBasePrice = defaultService?.defaultPrice || 0;
       const defaultClientDiscount = defaultClient?.discountPercentage || 0;
@@ -381,10 +413,44 @@ const App: React.FC = () => {
         bookingFeeAmount: settings.defaultBookingFee, // Using the global setting value here
         notes: '',
         endTime: `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`,
+        serviceItems: initialServiceItems
       });
     }
     setAptModalOpen(true);
   };
+
+  useEffect(() => {
+    if (isAptModalOpen && !editingApt && aptForm.clientId && aptForm.serviceTypeId) {
+        // ... (existing useEffect logic if any, currently snippet shows only start)
+    }
+  }, [isAptModalOpen, editingApt]); // Simplified dependency check based on context
+
+// ... (skipping down to JSX update) ...
+
+                        {(aptForm.serviceItems || []).map((service) => (
+                            <div key={service.instanceId} className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-teal-50 dark:from-blue-900/20 dark:to-teal-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                                <div className="flex-1">
+                                    <p className="font-medium text-gray-800 dark:text-gray-200">{service.name}</p>
+                                    <p className="text-xs text-gray-600 dark:text-gray-400">{service.durationMinutes} min</p>
+                                </div>
+                                <input 
+                                    type="number" 
+                                    min="0" 
+                                    step="0.01"
+                                    className="w-24 px-2 py-1 text-sm border rounded dark:bg-gray-800 dark:border-gray-600"
+                                    value={service.unitPrice}
+                                    onChange={e => handleUpdateServicePrice(service.instanceId!, Number(e.target.value))}
+                                />
+                                <span className="text-sm font-medium">€</span>
+                                <button 
+                                    type="button"
+                                    onClick={() => handleRemoveServiceFromApt(service.instanceId!)}
+                                    className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ))}
 
   useEffect(() => {
     if (isAptModalOpen && !editingApt && aptForm.clientId && aptForm.serviceTypeId) {
@@ -452,19 +518,88 @@ const App: React.FC = () => {
     setAptForm({ ...aptForm, inventoryItems: updated, inventoryTotal: newTotal });
   };
 
+  const handleAddServiceToApt = (serviceId: string) => {
+      const service = services.find(s => s.id === serviceId);
+      if (!service) return;
+      
+      const newItem = { 
+          instanceId: `srv-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          serviceId, 
+          name: service.name, 
+          unitPrice: service.defaultPrice,
+          durationMinutes: service.defaultDuration
+      };
 
-  const handleSaveApt = async (e: React.FormEvent) => {
+      const updated = [...(aptForm.serviceItems || []), newItem];
+      
+      // Recalculate totals
+      const newBasePrice = updated.reduce((sum, s) => sum + s.unitPrice, 0);
+      const newDuration = updated.reduce((sum, s) => sum + s.durationMinutes, 0);
+      const newFinalPrice = calculateFinalPrice(newBasePrice, aptForm.discountPercentage || 0);
+      
+      setAptForm({ 
+          ...aptForm, 
+          serviceItems: updated, 
+          basePrice: newBasePrice,
+          durationMinutes: newDuration,
+          price: newFinalPrice
+      });
+  };
+
+  const handleRemoveServiceFromApt = (instanceId: string) => {
+      const updated = (aptForm.serviceItems || []).filter(s => s.instanceId !== instanceId);
+      
+      // Recalculate totals
+      const newBasePrice = updated.reduce((sum, s) => sum + s.unitPrice, 0);
+      const newDuration = updated.reduce((sum, s) => sum + s.durationMinutes, 0);
+      const newFinalPrice = calculateFinalPrice(newBasePrice, aptForm.discountPercentage || 0);
+      
+      setAptForm({ 
+          ...aptForm, 
+          serviceItems: updated, 
+          basePrice: newBasePrice,
+          durationMinutes: newDuration,
+          price: newFinalPrice
+      });
+  };
+
+  const handleUpdateServicePrice = (instanceId: string, newPrice: number) => {
+      const updated = (aptForm.serviceItems || []).map(s => {
+          if (s.instanceId === instanceId) {
+              return { ...s, unitPrice: newPrice };
+          }
+          return s;
+      });
+      
+      // Recalculate totals
+      const newBasePrice = updated.reduce((sum, s) => sum + s.unitPrice, 0);
+      const newFinalPrice = calculateFinalPrice(newBasePrice, aptForm.discountPercentage || 0);
+      
+      setAptForm({ 
+          ...aptForm, 
+          serviceItems: updated, 
+          basePrice: newBasePrice,
+          price: newFinalPrice
+      });
+  };
+
+
+    const handleSaveApt = async (e: React.FormEvent) => {
     e.preventDefault();
     const uid = getUid();
-    if (!uid || !aptForm.clientId || !aptForm.serviceTypeId || !aptForm.date || !aptForm.statusId) {
-        addToast("Por favor, rellena todos los campos obligatorios.", "error");
+    
+    // Determine primary service ID (legacy support + validation)
+    const primaryServiceId = aptForm.serviceTypeId || (aptForm.serviceItems && aptForm.serviceItems.length > 0 ? aptForm.serviceItems[0].serviceId : '');
+
+    if (!uid || !aptForm.clientId || !primaryServiceId || !aptForm.date || !aptForm.statusId) {
+        addToast("Por favor, rellena todos los campos obligatorios (Cliente, Fecha, Tratamiento, Estado).", "error");
         return;
     }
 
     const saved = await dataService.saveAppointment({
       id: editingApt?.id || '',
       clientId: aptForm.clientId,
-      serviceTypeId: aptForm.serviceTypeId,
+      serviceTypeId: primaryServiceId,
       staffId: aptForm.staffId,
       statusId: aptForm.statusId,
       date: aptForm.date,
@@ -879,6 +1014,7 @@ const App: React.FC = () => {
                 pendingContext={pendingAppointmentContext}
                 onClearPendingContext={() => setPendingAppointmentContext(null)}
                 defaultView={settings.defaultCalendarView}
+                timeFormat={settings.timeFormat}
             />
         }
         {activeTab === 'clients' && 
@@ -1030,194 +1166,266 @@ const App: React.FC = () => {
             onCopy={executeCopy} 
         />
 
-        <Modal isOpen={isAptModalOpen} onClose={() => setAptModalOpen(false)} title={editingApt ? "Editar Cita" : "Nueva Cita"}>
-            <form onSubmit={handleSaveApt} className="space-y-4">
-                <div>
-                    <label className={labelClass}>Cliente</label>
-                    <ClientSelect 
-                        clients={clients}
-                        appointments={appointments}
-                        statuses={statuses}
-                        value={aptForm.clientId || ''}
-                        onChange={(id) => setAptForm(prev => ({...prev, clientId: id}))}
-                        required
-                    />
-                </div>
-                <div>
-                    <label className={labelClass}>Tratamiento</label>
-                    <select required className={inputClass} value={aptForm.serviceTypeId || ''} onChange={e => {
-                        const s = services.find(srv => srv.id === e.target.value);
-                        setAptForm(prev => ({ 
-                            ...prev, 
-                            serviceTypeId: e.target.value, 
-                            basePrice: s?.defaultPrice || 0,
-                            durationMinutes: s?.defaultDuration || 60 
-                        }));
-                    }}>
-                        <option value="">Seleccionar Tratamiento</option>
-                        {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label className={labelClass}>Asignar a (Personal)</label>
-                    <select className={inputClass} value={aptForm.staffId || ''} onChange={e => setAptForm({...aptForm, staffId: e.target.value})}>
-                        <option value="">Sin asignar / Cualquiera</option>
-                        {staff.map(s => (
-                            <option key={s.id} value={s.id}>{s.name} {s.specialties.includes(aptForm.serviceTypeId || '') ? '★' : ''}</option>
-                        ))}
-                    </select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <input type="date" required className={inputClass} value={aptForm.date?.split('T')[0] || ''} onChange={e => setAptForm({...aptForm, date: new Date(e.target.value).toISOString()})} />
-                    <input type="time" required className={inputClass} value={aptForm.startTime || ''} onChange={e => setAptForm({...aptForm, startTime: e.target.value})} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div><label className={labelClass}>Duración (min)</label><input type="number" min="1" className={inputClass} value={aptForm.durationMinutes || 0} onChange={e => setAptForm({...aptForm, durationMinutes: Number(e.target.value)})} /></div>
-                    <div>
-                        <label className={labelClass}>Precio Base (€)</label>
-                        <input 
-                            type="number" 
-                            className={inputClass} 
-                            value={aptForm.basePrice || 0} 
-                            onChange={e => {
-                                const newBasePrice = Number(e.target.value);
-                                const newFinalPrice = calculateFinalPrice(newBasePrice, aptForm.discountPercentage || 0);
-                                setAptForm(prev => ({...prev, basePrice: newBasePrice, price: newFinalPrice}));
-                            }} 
-                        />
-                    </div>
-                </div>
-
-                {/* Inventory Items Section */}
-                <div className="border-t border-gray-100 dark:border-gray-700 pt-4 mt-2">
-                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                        <Box className="w-4 h-4" /> Venta de Productos (Opcional)
-                    </label>
+        <Modal isOpen={isAptModalOpen} onClose={() => setAptModalOpen(false)} title={editingApt ? "Editar Cita" : "Nueva Cita"} maxWidth="max-w-4xl">
+            <form onSubmit={handleSaveApt} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Left Column: Client & Appointment Details */}
+                <div className="space-y-4">
+                    <h4 className="font-semibold text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-700 pb-2">Detalles Generales</h4>
                     
-                    <div className="space-y-3">
-                        <select 
-                            className={inputClass}
-                            onChange={e => {
-                                if (e.target.value) {
-                                    handleAddInventoryToApt(e.target.value);
-                                    e.target.value = '';
-                                }
-                            }}
-                            value=""
-                        >
-                            <option value="">Añadir producto...</option>
-                            {inventory.map(item => (
-                                <option key={item.id} value={item.id} disabled={item.stock <= 0}>
-                                    {item.name} ({item.stock} disponibles) - {formatCurrency(item.salePrice)}
-                                </option>
-                            ))}
-                        </select>
-
-                        {aptForm.inventoryItems && aptForm.inventoryItems.length > 0 && (
-                            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 space-y-2">
-                                {aptForm.inventoryItems.map(item => (
-                                    <div key={item.itemId} className="flex items-center justify-between text-sm">
-                                        <div className="flex-1">
-                                            <div className="font-medium text-gray-900 dark:text-white">{item.name}</div>
-                                            <div className="flex items-center gap-1 text-xs text-gray-500">
-                                                <span>{item.quantity} x </span>
-                                                <input 
-                                                    type="number" 
-                                                    className="w-16 p-0.5 bg-transparent border-b border-gray-300 dark:border-gray-600 focus:border-teal-500 outline-none"
-                                                    value={item.unitPrice}
-                                                    onChange={(e) => handleUpdateInventoryItemPrice(item.itemId, Number(e.target.value))}
-                                                />
-                                                <span>€</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="font-bold text-gray-900 dark:text-white">{formatCurrency(item.totalPrice)}</div>
-                                            <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded overflow-hidden bg-white dark:bg-gray-700">
-                                                <button type="button" onClick={() => handleRemoveInventoryFromApt(item.itemId)} className="px-2 py-0.5 hover:bg-gray-100 dark:hover:bg-gray-600">-</button>
-                                                <span className="px-2 py-0.5 text-xs border-x border-gray-300 dark:border-gray-600">{item.quantity}</span>
-                                                <button type="button" onClick={() => handleAddInventoryToApt(item.itemId)} className="px-2 py-0.5 hover:bg-gray-100 dark:hover:bg-gray-600">+</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                                <div className="pt-2 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center text-sm font-bold">
-                                    <span>Total Productos</span>
-                                    <span>{formatCurrency(aptForm.inventoryTotal || 0)}</span>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Booking Fee Section */}
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
-                    <label className="flex items-center space-x-2 cursor-pointer">
-                        <input 
-                            type="checkbox" 
-                            className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 w-4 h-4"
-                            checked={aptForm.bookingFeePaid || false}
-                            onChange={e => setAptForm({...aptForm, bookingFeePaid: e.target.checked})}
+                    <div>
+                        <label className={labelClass}>Cliente</label>
+                        <ClientSelect 
+                            clients={clients}
+                            appointments={appointments}
+                            statuses={statuses}
+                            value={aptForm.clientId || ''}
+                            onChange={(id) => setAptForm(prev => ({...prev, clientId: id}))}
+                            required
                         />
-                        <span className="text-sm font-semibold text-blue-800 dark:text-blue-300 flex items-center">
-                            <Wallet className="w-4 h-4 mr-1.5" /> Pago de Reserva realizado
-                        </span>
-                    </label>
-                    {aptForm.bookingFeePaid && (
-                        <div className="mt-2 pl-6">
-                            <label className="block text-xs font-medium text-blue-700 dark:text-blue-400 mb-1">Importe Reserva (€)</label>
-                            <input 
-                                type="number" 
-                                className="w-full rounded-md border-blue-200 dark:border-blue-800 shadow-sm p-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                                value={aptForm.bookingFeeAmount || 0}
-                                onChange={e => setAptForm({...aptForm, bookingFeeAmount: Number(e.target.value)})}
-                            />
-                        </div>
-                    )}
-                </div>
-
-                {/* Final Price Summary */}
-                <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg flex flex-col gap-1 border border-gray-200 dark:border-gray-600">
-                    <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-                        <span>Total Tratamiento ({aptForm.discountPercentage || 0}% desc.):</span>
-                        <span className="font-medium">{formatCurrency(aptForm.price || 0)}</span>
                     </div>
-                    {aptForm.bookingFeePaid && (
-                        <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
-                            <span>Reserva pagada:</span>
-                            <span>-{formatCurrency(aptForm.bookingFeeAmount || 0)}</span>
-                        </div>
-                    )}
-                    <div className="flex justify-between text-base font-bold text-gray-900 dark:text-white border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
-                        <span>Total a Cobrar:</span>
-                        <span>{formatCurrency((aptForm.price || 0) + (aptForm.inventoryTotal || 0) - (aptForm.bookingFeePaid ? (aptForm.bookingFeeAmount || 0) : 0))}</span>
-                    </div>
-                </div>
 
-                <div>
-                    <label className={labelClass}>Estado</label>
-                    <div className="flex gap-2">
-                        <select className={inputClass} value={aptForm.statusId} onChange={e => setAptForm({...aptForm, statusId: e.target.value})}>
-                            {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className={labelClass}>Fecha</label>
+                            <input type="date" required className={inputClass} value={aptForm.date?.split('T')[0] || ''} onChange={e => setAptForm({...aptForm, date: new Date(e.target.value).toISOString()})} />
+                        </div>
+                        <div>
+                            <label className={labelClass}>Hora</label>
+                            <input type="time" required className={inputClass} value={aptForm.startTime || ''} onChange={e => setAptForm({...aptForm, startTime: e.target.value})} />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className={labelClass}>Asignar a (Personal)</label>
+                        <select className={inputClass} value={aptForm.staffId || ''} onChange={e => setAptForm({...aptForm, staffId: e.target.value})}>
+                            <option value="">Sin asignar / Cualquiera</option>
+                            {staff.map(s => {
+                                // Check if staff specializes in any of the added services  
+                                const hasSpecialty = (aptForm.serviceItems || []).some(service => 
+                                    s.specialties.includes(service.serviceId)
+                                );
+                                return (
+                                    <option key={s.id} value={s.id}>{s.name} {hasSpecialty ? '★' : ''}</option>
+                                );
+                            })}
                         </select>
-                        <button 
-                            type="button"
-                            onClick={() => {
-                                const target = statuses.find(s => s.isDefault && s.isBillable) || statuses.find(s => s.isBillable);
-                                if (target) setAptForm({...aptForm, statusId: target.id});
-                            }}
-                            className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 p-2 rounded-md mt-1 border border-emerald-200 dark:border-emerald-800"
-                        >
-                            <Check className="w-5 h-5" />
-                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className={labelClass}>Estado</label>
+                            <div className="flex gap-2">
+                                <select required className={inputClass} value={aptForm.statusId || ''} onChange={e => setAptForm({...aptForm, statusId: e.target.value})}>
+                                    {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                                <button 
+                                    type="button"
+                                    onClick={() => {
+                                        const target = statuses.find(s => s.isDefault && s.isBillable) || statuses.find(s => s.isBillable);
+                                        if (target) setAptForm({...aptForm, statusId: target.id});
+                                    }}
+                                    className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 p-2 rounded-md mt-1 border border-emerald-200 dark:border-emerald-800"
+                                    title="Marcar como realizado/pagado"
+                                >
+                                    <Check className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label className={labelClass}>Duración (min)</label>
+                            <input type="number" min="1" className={inputClass} value={aptForm.durationMinutes || 0} onChange={e => setAptForm({...aptForm, durationMinutes: Number(e.target.value)})} />
+                        </div>
+                    </div>
+
+                    <div>
+                         <label className={labelClass}>Notas</label>
+                         <textarea className={`${inputClass} h-32`} value={aptForm.notes || ''} onChange={e => setAptForm({...aptForm, notes: e.target.value})} placeholder="Notas internas..." />
                     </div>
                 </div>
-                <div>
-                    <label className={labelClass}>Notas</label>
-                    <textarea className={`${inputClass} h-24`} value={aptForm.notes || ''} onChange={e => setAptForm({...aptForm, notes: e.target.value})} placeholder="Añadir notas..." />
+
+                {/* Right Column: Services & Financials */}
+                <div className="space-y-4">
+                    <h4 className="font-semibold text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-700 pb-2">Servicios y Facturación</h4>
+
+                    {/* Multiple Services Section */}
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+                            Tratamientos
+                        </label>
+                        
+                        <div className="space-y-3">
+                            <select 
+                                className={inputClass}
+                                onChange={e => {
+                                    if (e.target.value) {
+                                        handleAddServiceToApt(e.target.value);
+                                        e.target.value = '';
+                                    }
+                                }}
+                            >
+                                <option value="">Añadir tratamiento...</option>
+                                {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                            
+                            {(!aptForm.serviceItems || aptForm.serviceItems.length === 0) && (
+                                <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                                    Añade al menos un tratamiento antes de guardar
+                                </p>
+                            )}
+                            
+                            {(aptForm.serviceItems || []).map((service) => (
+                                <div key={service.instanceId} className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-teal-50 dark:from-blue-900/20 dark:to-teal-900/20 p-2 rounded-lg border border-blue-200 dark:border-blue-800">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-sm text-gray-800 dark:text-gray-200 truncate">{service.name}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">{service.durationMinutes} min</p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <input 
+                                            type="number" 
+                                            min="0" 
+                                            step="0.01"
+                                            className="w-20 px-2 py-1 text-sm border rounded dark:bg-gray-800 dark:border-gray-600 text-right"
+                                            value={service.unitPrice}
+                                            onChange={e => handleUpdateServicePrice(service.instanceId!, Number(e.target.value))}
+                                        />
+                                        <span className="text-xs font-medium">€</span>
+                                        <button 
+                                            type="button"
+                                            onClick={() => handleRemoveServiceFromApt(service.instanceId!)}
+                                            className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                            
+                            {(aptForm.serviceItems || []).length > 0 && (
+                                <div className="flex justify-between items-center pt-2">
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Subtotal Tratamientos:</span>
+                                    <span className="text-base font-bold text-blue-600 dark:text-blue-400">
+                                        {(aptForm.serviceItems || []).reduce((sum, s) => sum + s.unitPrice, 0).toFixed(2)} €
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Inventory */}
+                     <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                            <Box className="w-4 h-4" /> Productos (Opcional)
+                        </label>
+                        
+                        <div className="space-y-2">
+                            <select 
+                                className={inputClass}
+                                onChange={e => {
+                                    if (e.target.value) {
+                                        handleAddInventoryToApt(e.target.value);
+                                        e.target.value = '';
+                                    }
+                                }}
+                                value=""
+                            >
+                                <option value="">Añadir producto...</option>
+                                {inventory.map(item => (
+                                    <option key={item.id} value={item.id} disabled={item.stock <= 0}>
+                                        {item.name} ({item.stock}) - {formatCurrency(item.salePrice)}
+                                    </option>
+                                ))}
+                            </select>
+
+                            {aptForm.inventoryItems && aptForm.inventoryItems.length > 0 && (
+                                <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-2 space-y-2">
+                                    {aptForm.inventoryItems.map(item => (
+                                        <div key={item.itemId} className="flex items-center justify-between text-xs">
+                                            <div className="flex-1 truncate pr-2">
+                                                <div className="font-medium text-gray-900 dark:text-white truncate">{item.name}</div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 h-6">
+                                                    <button type="button" onClick={() => handleRemoveInventoryFromApt(item.itemId)} className="px-1.5 hover:bg-gray-100 dark:hover:bg-gray-600">-</button>
+                                                    <span className="px-1.5 border-x border-gray-300 dark:border-gray-600">{item.quantity}</span>
+                                                    <button type="button" onClick={() => handleAddInventoryToApt(item.itemId)} className="px-1.5 hover:bg-gray-100 dark:hover:bg-gray-600">+</button>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                     <input
+                                                        type="number"
+                                                        value={item.unitPrice}
+                                                        onChange={(e) => handleUpdateInventoryItemPrice(item.itemId, Number(e.target.value))}
+                                                        className="w-16 h-6 text-right text-xs border rounded px-1"
+                                                    />
+                                                    <span className="text-xs font-bold">€</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Financial Summary */}
+                    <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg flex flex-col gap-1 border border-gray-200 dark:border-gray-600">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                            <div className="flex-1">
+                                <label className="text-xs font-medium block">Descuento (%)</label>
+                                <input 
+                                    type="number" 
+                                    min="0" 
+                                    max="100" 
+                                    className="w-full text-sm border rounded p-1"
+                                    value={aptForm.discountPercentage || 0} 
+                                    onChange={e => {
+                                        const newDiscount = Number(e.target.value);
+                                        const newFinalPrice = calculateFinalPrice(aptForm.basePrice, newDiscount);
+                                        setAptForm(prev => ({...prev, discountPercentage: newDiscount, price: newFinalPrice}));
+                                    }} 
+                                />
+                            </div>
+                            <div className="flex-1 text-right">
+                                <label className="flex items-center justify-end gap-1 text-xs cursor-pointer select-none">
+                                    <input 
+                                        type="checkbox" 
+                                        className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 w-3 h-3"
+                                        checked={aptForm.bookingFeePaid || false}
+                                        onChange={e => setAptForm({...aptForm, bookingFeePaid: e.target.checked})}
+                                    />
+                                    <span className="text-blue-700 dark:text-blue-300">Reserva Pagada</span>
+                                </label>
+                                {aptForm.bookingFeePaid && (
+                                     <input 
+                                        type="number" 
+                                        className="w-full text-sm border rounded p-1 mt-1 text-right"
+                                        value={aptForm.bookingFeeAmount || 0}
+                                        onChange={e => setAptForm({...aptForm, bookingFeeAmount: Number(e.target.value)})}
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="border-t border-gray-200 dark:border-gray-600 pt-2 flex justify-between text-base font-bold text-gray-900 dark:text-white">
+                            <span>Total a Cobrar:</span>
+                            <span>{formatCurrency((aptForm.price || 0) + (aptForm.inventoryTotal || 0) - (aptForm.bookingFeePaid ? (aptForm.bookingFeeAmount || 0) : 0))}</span>
+                        </div>
+                    </div>
                 </div>
-                <div className="flex gap-2 pt-2">
-                    {editingApt && <button type="button" onClick={handleDeleteApt} className="flex-1 bg-red-100 text-red-600 p-2 rounded">Eliminar</button>}
-                    <button type="submit" className="flex-[2] bg-teal-600 text-white p-2 rounded">Guardar</button>
+
+                {/* Footer Actions */}
+                <div className="col-span-1 md:col-span-2 flex gap-3 pt-4 border-t border-gray-100 dark:border-gray-700 mt-2">
+                    {editingApt && (
+                        <button 
+                            type="button" 
+                            onClick={handleDeleteApt} 
+                            className="mr-auto px-4 py-2 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        >
+                            Eliminar Cita
+                        </button>
+                    )}
+                    <button type="button" onClick={() => setAptModalOpen(false)} className="px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 rounded-lg transition-colors">Cancelar</button>
+                    <button type="submit" className="px-6 py-2 bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-lg shadow-md hover:shadow-lg transition-all transform hover:scale-[1.02]">Guardar Cita</button>
                 </div>
             </form>
         </Modal>

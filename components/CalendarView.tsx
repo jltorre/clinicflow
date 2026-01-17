@@ -32,6 +32,7 @@ interface CalendarViewProps {
   pendingContext: { clientId: string; serviceTypeId: string; recommendedDate: Date } | null;
   onClearPendingContext: () => void;
   defaultView?: ViewMode;
+  timeFormat?: '12h' | '24h';
 }
 
 type ViewMode = 'list' | 'day' | 'week' | 'month';
@@ -71,7 +72,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onQuickComplete,
   pendingContext,
   onClearPendingContext,
-  defaultView = 'week'
+  defaultView = 'week',
+  timeFormat = '24h'
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedTreatments, setSelectedTreatments] = useState<string[]>([]);
@@ -102,6 +104,15 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const [tempResizeTop, setTempResizeTop] = useState<number | null>(null);
 
   const skipNextClick = useRef(false);
+
+  const formatTime = (time: string) => {
+    if (timeFormat === '24h') return time;
+    const [h, m] = time.split(':');
+    const hour = parseInt(h);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${m} ${ampm}`;
+  };
 
   useEffect(() => {
     if (pendingContext) {
@@ -438,7 +449,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             const bgClass = service?.color.split(' ')[0] || 'bg-gray-100'; const textClass = service?.color.split(' ')[1] || 'text-gray-800';
                             return (
                                 <tr key={apt.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                    <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-900 dark:text-white">{format(new Date(apt.date), 'dd MMM yyyy', {locale: es})}</div><div className="text-sm text-gray-600 dark:text-gray-400">{apt.startTime}</div></td>
+                                    <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-900 dark:text-white">{format(new Date(apt.date), 'dd MMM yyyy', {locale: es})}</div><div className="text-sm text-gray-600 dark:text-gray-400">{formatTime(apt.startTime)}</div></td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white font-medium"><button onClick={() => onViewClient(apt.clientId)} className="hover:underline hover:text-teal-600">{apt.clientName}</button></td>
                                     <td className="px-6 py-4 whitespace-nowrap"><span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${bgClass} ${textClass}`}>{apt.serviceName}</span></td>
                                     <td className="px-6 py-4 whitespace-nowrap">{staffMember ? (<div className="flex items-center"><div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-2 ${staffMember.color}`}>{staffMember.name.charAt(0)}</div><span className="text-sm text-gray-700 dark:text-gray-300">{apt.staffName}</span></div>) : <span className="text-sm text-gray-500 dark:text-gray-400">-</span>}</td>
@@ -489,7 +500,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                               const service = getService(apt.serviceTypeId); const status = getStatus(apt.statusId);
                                               return (
                                                   <div key={apt.id} draggable onDragStart={(e) => handleDragStart(e, apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt); }} className={`text-[10px] px-1.5 py-0.5 rounded truncate cursor-pointer shadow-sm border-l-2 ${service?.color.split(' ')[0]} ${service?.color.split(' ')[1]} ${status?.isBillable ? 'border-l-emerald-500' : 'border-l-transparent'}`}>
-                                                      {apt.startTime} {getClientName(apt.clientId)}
+                                                      {formatTime(apt.startTime)} {getClientName(apt.clientId)}
                                                   </div>
                                               )
                                           })}
@@ -528,7 +539,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     <div className="w-14 shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky left-0 z-10 flex flex-col items-center">
                         {TIME_SLOTS.map(hour => (
                             <div key={hour} className="relative w-full" style={{ height: slotHeight }}>
-                                <span className="absolute -top-2.5 right-2 text-xs text-gray-500 font-medium">{hour}:00</span>
+                                <span className="absolute -top-2.5 right-2 text-xs text-gray-500 font-medium">{formatTime(`${hour}:00`)}</span>
                                 <div className="absolute top-0 right-0 w-2 border-t border-gray-200 dark:border-gray-700"></div>
                             </div>
                         ))}
@@ -625,12 +636,25 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                         const leftPosition = colInfo.column * columnWidth;
                                         
                                         return (
-                                            <div key={apt.id} draggable={!isResizing} onDragStart={(e) => handleDragStart(e, apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt); }} className={`absolute rounded-md px-2 py-1 shadow-sm border-l-[3px] cursor-pointer z-10 overflow-hidden transition-shadow ${service?.color.split(' ')[0] || 'bg-gray-100'} ${service?.color.split(' ')[1] || 'text-gray-800'} ${status?.isBillable ? 'ring-1 ring-emerald-400 ring-opacity-50' : ''} ${isResizing ? 'shadow-lg z-50 opacity-90 scale-[1.02]' : 'hover:shadow-md'}`} style={{ top: visualTop, height: Math.max(height, 28), left: `${leftPosition}%`, width: `${columnWidth - 1}%`, cursor: isResizing ? 'row-resize' : 'grab' }}>
+                                            <div key={apt.id} draggable={!isResizing} onDragStart={(e) => handleDragStart(e, apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt); }} className={`absolute rounded-md px-2 py-0.5 shadow-sm border-l-[3px] cursor-pointer z-10 overflow-hidden transition-shadow ${service?.color.split(' ')[0] || 'bg-gray-100'} ${service?.color.split(' ')[1] || 'text-gray-800'} ${status?.isBillable ? 'ring-1 ring-emerald-400 ring-opacity-50' : ''} ${isResizing ? 'shadow-lg z-50 opacity-90 scale-[1.02]' : 'hover:shadow-md'}`} style={{ top: visualTop, height: Math.max(height, 24), left: `${leftPosition}%`, width: `${columnWidth - 1}%`, cursor: isResizing ? 'row-resize' : 'grab' }}>
                                                 <div className="absolute top-0 left-0 right-0 h-1.5 cursor-ns-resize z-20 hover:bg-black/5" onMouseDown={(e) => handleResizeStart(e, apt, 'top')} />
-                                                <div className="flex justify-between items-start text-xs pointer-events-none"><span className="font-bold">{apt.startTime}</span>{status?.isBillable && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>}</div>
-                                                <div className="font-bold text-xs truncate leading-tight mt-0.5 pointer-events-none">{getClientName(apt.clientId)}</div>
-                                                <div className="text-[10px] opacity-80 truncate pointer-events-none">{service?.name}</div>
-                                                {staffMember && (<div className="absolute bottom-1 right-1"><div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold ${staffMember.color}`}>{staffMember.name.charAt(0)}</div></div>)}
+                                                
+                                                {/* Contenido condicional según la altura */}
+                                                {height < 40 ? (
+                                                    <div className="flex items-center gap-1 h-full pointer-events-none">
+                                                        <span className="font-bold text-[10px] shrink-0">{formatTime(apt.startTime)}</span>
+                                                        <span className="font-bold text-[10px] truncate leading-tight flex-1">{getClientName(apt.clientId)}</span>
+                                                        {status?.isBillable && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></div>}
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div className="flex justify-between items-start text-xs pointer-events-none transition-opacity"><span className="font-bold">{formatTime(apt.startTime)}</span>{status?.isBillable && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>}</div>
+                                                        <div className="font-bold text-xs truncate leading-tight mt-0.5 pointer-events-none">{getClientName(apt.clientId)}</div>
+                                                        <div className="text-[10px] opacity-80 truncate pointer-events-none">{service?.name}</div>
+                                                        {staffMember && height > 55 && (<div className="absolute bottom-1 right-1"><div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold ${staffMember.color}`}>{staffMember.name.charAt(0)}</div></div>)}
+                                                    </>
+                                                )}
+                                                
                                                 <div className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize z-20 hover:bg-black/5" onMouseDown={(e) => handleResizeStart(e, apt, 'bottom')} />
                                             </div>
                                         );
@@ -665,7 +689,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                         <div key={apt.id} onClick={() => onEditAppointment(apt)} className={`rounded-xl p-3 border shadow-sm flex items-center justify-between ${service?.color.split(' ')[0] || 'bg-gray-100'} border-l-[3px] ${status?.isBillable ? 'border-l-emerald-500' : 'border-l-transparent'}`}>
                                            <div className="flex items-center gap-3 overflow-hidden">
                                                <div className="flex flex-col items-center min-w-[3rem] border-r border-black/10 pr-3">
-                                                   <span className="font-bold text-sm">{apt.startTime}</span>
+                                                   <span className="font-bold text-sm">{formatTime(apt.startTime)}</span>
                                                    <span className="text-[10px] text-gray-600 dark:text-gray-400">{apt.durationMinutes}m</span>
                                                </div>
                                                <div className="min-w-0"><h4 className="font-bold text-sm truncate">{getClientName(apt.clientId)}</h4><p className="text-xs text-gray-700 dark:text-gray-300 truncate">{service?.name}</p>{staffMember && <p className="text-[10px] text-gray-600 dark:text-gray-400 flex items-center mt-0.5"><User className="w-3 h-3 mr-1"/> {staffMember.name}</p>}</div>

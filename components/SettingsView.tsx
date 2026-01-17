@@ -141,7 +141,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <option value="week">Semana</option>
                 <option value="month">Mes</option>
               </select>
-              <p className="text-xs text-gray-500 mt-2 italic">Selecciona qué vista quieres ver al abrir la aplicación.</p>
+            </div>
+            <div className="max-w-xs">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Formato de Hora</label>
+                <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+                    <button 
+                        onClick={() => onSaveSettings({ ...settings, timeFormat: '24h' })}
+                        className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${settings.timeFormat !== '12h' ? 'bg-white dark:bg-gray-600 shadow text-teal-600 dark:text-teal-400' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        24 Horas
+                    </button>
+                    <button 
+                        onClick={() => onSaveSettings({ ...settings, timeFormat: '12h' })}
+                        className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${settings.timeFormat === '12h' ? 'bg-white dark:bg-gray-600 shadow text-teal-600 dark:text-teal-400' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        12 Horas
+                    </button>
+                </div>
             </div>
           </div>
 
