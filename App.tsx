@@ -10,6 +10,7 @@ import { AnalyticsDashboard, FinancialReport } from './components/AnalyticsDashb
 import { LoginView } from './components/LoginView';
 import { SettingsView } from './components/SettingsView';
 import { ClientSelect } from './components/ClientSelect';
+import { TimeSelector } from './components/TimeSelector';
 import { OnboardingTour } from './components/OnboardingTour';
 import { ClientDetailPage } from './components/ClientDetailPage';
 import { ServiceDetailPage } from './components/ServiceDetailPage'; 
@@ -1208,14 +1209,20 @@ const App: React.FC = () => {
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-[1fr_1.5fr] gap-4">
                         <div>
                             <label className={labelClass}>Fecha</label>
                             <input type="date" required className={inputClass} value={aptForm.date?.split('T')[0] || ''} onChange={e => setAptForm({...aptForm, date: new Date(e.target.value).toISOString()})} />
                         </div>
                         <div>
                             <label className={labelClass}>Hora</label>
-                            <input type="time" required className={inputClass} value={aptForm.startTime || ''} onChange={e => setAptForm({...aptForm, startTime: e.target.value})} />
+                            <TimeSelector 
+                                required 
+                                className={inputClass} 
+                                value={aptForm.startTime || ''} 
+                                onChange={val => setAptForm({...aptForm, startTime: val})} 
+                                format={settings.timeFormat}
+                            />
                         </div>
                     </div>
 
