@@ -137,7 +137,7 @@ const App: React.FC = () => {
   const [statuses, setStatuses] = useState<AppStatus[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [settings, setSettings] = useState<AppSettings>({ currency: 'EUR', defaultBookingFee: 20 });
+  const [settings, setSettings] = useState<AppSettings>({ currency: 'EUR', defaultBookingFee: 20, defaultCalendarView: 'week' });
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
 
@@ -877,6 +877,7 @@ const App: React.FC = () => {
                 onQuickComplete={handleQuickComplete}
                 pendingContext={pendingAppointmentContext}
                 onClearPendingContext={() => setPendingAppointmentContext(null)}
+                defaultView={settings.defaultCalendarView}
             />
         }
         {activeTab === 'clients' && 

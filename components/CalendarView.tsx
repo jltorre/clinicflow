@@ -31,6 +31,7 @@ interface CalendarViewProps {
   onQuickComplete?: (apt: Appointment) => void;
   pendingContext: { clientId: string; serviceTypeId: string; recommendedDate: Date } | null;
   onClearPendingContext: () => void;
+  defaultView?: ViewMode;
 }
 
 type ViewMode = 'list' | 'day' | 'week' | 'month';
@@ -69,14 +70,20 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onViewClient,
   onQuickComplete,
   pendingContext,
-  onClearPendingContext
+  onClearPendingContext,
+  defaultView = 'week'
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedTreatments, setSelectedTreatments] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [searchText, setSearchText] = useState('');
   const [showWeekends, setShowWeekends] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>('week');
+  const [viewMode, setViewMode] = useState<ViewMode>(defaultView);
+  
+  // Update view mode if default view changes (e.g. from settings)
+  useEffect(() => {
+    if (defaultView) setViewMode(defaultView);
+  }, [defaultView]);
   const [listScope, setListScope] = useState<'week' | 'all'>('week');
   const [now, setNow] = useState(new Date());
   const [slotHeight, setSlotHeight] = useState(64);

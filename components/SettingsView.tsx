@@ -30,11 +30,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ statuses, settings, 
   const [statusForm, setStatusForm] = useState<Partial<AppStatus>>({});
   const [isCreating, setIsCreating] = useState(false);
   const [bookingFee, setBookingFee] = useState(settings.defaultBookingFee);
+  const [defaultView, setDefaultView] = useState(settings.defaultCalendarView || 'week');
 
   // Synchronize local state with settings when they change
   useEffect(() => {
       setBookingFee(settings.defaultBookingFee);
-  }, [settings.defaultBookingFee]);
+      setDefaultView(settings.defaultCalendarView || 'week');
+  }, [settings.defaultBookingFee, settings.defaultCalendarView]);
 
   const handleEdit = (status: AppStatus) => {
       setEditingId(status.id);
@@ -68,8 +70,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ statuses, settings, 
       setStatusForm({});
   };
 
-  const handleSaveBookingFee = () => {
-      onSaveSettings({ ...settings, defaultBookingFee: bookingFee });
+  const handleSaveGeneralSettings = () => {
+      onSaveSettings({ 
+        ...settings, 
+        defaultBookingFee: bookingFee,
+        defaultCalendarView: defaultView
+      });
   };
 
   return (
@@ -100,23 +106,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ statuses, settings, 
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Configuración de Pagos</h2>
         </div>
         <div className="p-6">
-          <div className="max-w-xs">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Importe de Reserva por defecto (€)</label>
-            <div className="flex gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="max-w-xs">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Importe de Reserva por defecto (€)</label>
               <input 
                 type="number" 
-                className="flex-1 rounded-md border-gray-300 dark:border-gray-600 shadow-sm p-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-white"
+                className="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm p-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-white"
                 value={bookingFee}
                 onChange={e => setBookingFee(Number(e.target.value))}
               />
-              <button 
-                onClick={handleSaveBookingFee}
-                className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors flex items-center"
-              >
-                <Save className="w-4 h-4 mr-1.5" /> Guardar
-              </button>
+              <p className="text-xs text-gray-500 mt-2 italic">Este importe aparecerá por defecto al marcar una cita con "Pago de Reserva".</p>
             </div>
-            <p className="text-xs text-gray-500 mt-2 italic">Este importe aparecerá por defecto al marcar una cita con "Pago de Reserva".</p>
+            <div className="max-w-xs">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Vista de Agenda por defecto</label>
+              <select 
+                className="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm p-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-white"
+                value={defaultView}
+                onChange={e => setDefaultView(e.target.value as any)}
+              >
+                <option value="list">Lista</option>
+                <option value="day">Día</option>
+                <option value="week">Semana</option>
+                <option value="month">Mes</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-2 italic">Selecciona qué vista quieres ver al abrir la aplicación.</p>
+            </div>
+          </div>
+          <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700 flex justify-end">
+            <button 
+              onClick={handleSaveGeneralSettings}
+              className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors flex items-center"
+            >
+              <Save className="w-4 h-4 mr-1.5" /> Guardar Cambios Generales
+            </button>
           </div>
         </div>
       </div>
