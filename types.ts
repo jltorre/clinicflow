@@ -116,6 +116,7 @@ export interface AppSettings {
   currency: string;
   defaultBookingFee: number; // NEW: Global setting for booking fee
   defaultCalendarView?: 'list' | 'day' | 'week' | 'month'; // NEW: Default view for the calendar
+  theme?: 'light' | 'dark' | 'system'; // NEW: Theme setting
 }
 
 // User Profile Type

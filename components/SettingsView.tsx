@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AppStatus, AppSettings } from '../types';
-import { Check, Plus, Trash2, Edit2, Save, RotateCcw, Wallet } from 'lucide-react';
+import { Check, Plus, Trash2, Edit2, Save, RotateCcw, Wallet, Sun, Moon, Monitor, LogOut } from 'lucide-react';
 
 interface SettingsViewProps {
   statuses: AppStatus[];
@@ -10,6 +10,7 @@ interface SettingsViewProps {
   onSaveStatus: (status: Partial<AppStatus>) => void;
   onDeleteStatus: (id: string) => void;
   onRestartTour?: () => void;
+  onLogout: () => void;
 }
 
 const PRESET_COLORS = [
@@ -25,18 +26,28 @@ const PRESET_COLORS = [
     { value: 'bg-teal-100 text-teal-800', label: 'Verde Azulado', display: 'bg-teal-100' },
 ];
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ statuses, settings, onSaveSettings, onSaveStatus, onDeleteStatus, onRestartTour }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ 
+    statuses, 
+    settings, 
+    onSaveSettings, 
+    onSaveStatus, 
+    onDeleteStatus, 
+    onRestartTour,
+    onLogout
+}) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [statusForm, setStatusForm] = useState<Partial<AppStatus>>({});
   const [isCreating, setIsCreating] = useState(false);
   const [bookingFee, setBookingFee] = useState(settings.defaultBookingFee);
   const [defaultView, setDefaultView] = useState(settings.defaultCalendarView || 'week');
+  const [theme, setTheme] = useState(settings.theme || 'system');
 
   // Synchronize local state with settings when they change
   useEffect(() => {
       setBookingFee(settings.defaultBookingFee);
       setDefaultView(settings.defaultCalendarView || 'week');
-  }, [settings.defaultBookingFee, settings.defaultCalendarView]);
+      setTheme(settings.theme || 'system');
+  }, [settings.defaultBookingFee, settings.defaultCalendarView, settings.theme]);
 
   const handleEdit = (status: AppStatus) => {
       setEditingId(status.id);
@@ -74,7 +85,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ statuses, settings, 
       onSaveSettings({ 
         ...settings, 
         defaultBookingFee: bookingFee,
-        defaultCalendarView: defaultView
+        defaultCalendarView: defaultView,
+        theme: theme
       });
   };
 
@@ -132,12 +144,41 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ statuses, settings, 
               <p className="text-xs text-gray-500 mt-2 italic">Selecciona qué vista quieres ver al abrir la aplicación.</p>
             </div>
           </div>
-          <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700 flex justify-end">
+
+          <div className="mt-8">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Tema de la Aplicación</label>
+            <div className="grid grid-cols-3 gap-4 max-w-lg">
+                <button 
+                    onClick={() => setTheme('light')}
+                    className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${theme === 'light' ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}
+                >
+                    <Sun className="w-6 h-6 mb-2" />
+                    <span className="text-xs font-bold">Claro</span>
+                </button>
+                <button 
+                    onClick={() => setTheme('dark')}
+                    className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${theme === 'dark' ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}
+                >
+                    <Moon className="w-6 h-6 mb-2" />
+                    <span className="text-xs font-bold">Oscuro</span>
+                </button>
+                <button 
+                    onClick={() => setTheme('system')}
+                    className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${theme === 'system' ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}
+                >
+                    <Monitor className="w-6 h-6 mb-2" />
+                    <span className="text-xs font-bold">Sistema</span>
+                </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-3 italic">El modo "Sistema" detectará automáticamente si prefieres el tema claro u oscuro según tu dispositivo.</p>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700 flex justify-end">
             <button 
               onClick={handleSaveGeneralSettings}
-              className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors flex items-center"
+              className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors flex items-center shadow-sm"
             >
-              <Save className="w-4 h-4 mr-1.5" /> Guardar Cambios Generales
+              <Save className="w-4 h-4 mr-1.5" /> Guardar Todos los Ajustes
             </button>
           </div>
         </div>
@@ -217,6 +258,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ statuses, settings, 
                 ))}
             </div>
         </div>
+      </div>
+
+      <div className="pt-10 flex flex-col items-center">
+            <button 
+                onClick={onLogout}
+                className="flex items-center gap-2 px-6 py-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 font-bold rounded-xl border border-red-100 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/40 transition-all shadow-sm"
+            >
+                <LogOut className="w-5 h-5" /> Cerrar Sesión
+            </button>
+            <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">¿Quieres salir de tu cuenta? Asegúrate de haber guardado tus cambios.</p>
       </div>
     </div>
   );

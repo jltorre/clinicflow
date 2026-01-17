@@ -137,7 +137,7 @@ const App: React.FC = () => {
   const [statuses, setStatuses] = useState<AppStatus[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [settings, setSettings] = useState<AppSettings>({ currency: 'EUR', defaultBookingFee: 20, defaultCalendarView: 'week' });
+  const [settings, setSettings] = useState<AppSettings>({ currency: 'EUR', defaultBookingFee: 20, defaultCalendarView: 'week', theme: 'system' });
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
 
@@ -156,14 +156,6 @@ const App: React.FC = () => {
     return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
   };
 
-  const [darkMode, setDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('clinicflow-theme');
-      if (saved) return saved === 'dark';
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return false;
-  });
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
@@ -244,16 +236,27 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const root = window.document.documentElement;
-    if (darkMode) {
-      root.classList.add('dark');
-      localStorage.setItem('clinicflow-theme', 'dark');
-    } else {
-      root.classList.remove('dark');
-      localStorage.setItem('clinicflow-theme', 'light');
-    }
-  }, [darkMode]);
+    const theme = settings.theme || 'system';
+    
+    const applyTheme = (isDark: boolean) => {
+      if (isDark) {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+    };
 
-  const toggleDarkMode = () => setDarkMode(!darkMode);
+    if (theme === 'system') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      applyTheme(mediaQuery.matches);
+
+      const handler = (e: MediaQueryListEvent) => applyTheme(e.matches);
+      mediaQuery.addEventListener('change', handler);
+      return () => mediaQuery.removeEventListener('change', handler);
+    } else {
+      applyTheme(theme === 'dark');
+    }
+  }, [settings.theme]);
 
   const [isAptModalOpen, setAptModalOpen] = useState(false);
   const [editingApt, setEditingApt] = useState<Appointment | null>(null);
@@ -854,8 +857,6 @@ const App: React.FC = () => {
     <Layout 
       activeTab={activeTab} 
       setActiveTab={setActiveTab} 
-      darkMode={darkMode} 
-      toggleDarkMode={toggleDarkMode} 
       isGuest={isGuest}
       userPhotoUrl={user?.photoURL || null}
       userName={userProfile?.name || user?.displayName || user?.email || 'Usuario'}
@@ -988,7 +989,7 @@ const App: React.FC = () => {
         )}
         {activeTab === 'analytics' && <AnalyticsDashboard clients={clients} appointments={appointments} services={services} statuses={statuses} staff={staff} inventory={inventory} onViewClient={handleViewClient} />}
         {activeTab === 'financial' && <FinancialReport clients={clients} appointments={appointments} services={services} statuses={statuses} staff={staff} inventory={inventory} onViewClient={handleViewClient} />}
-        {activeTab === 'settings' && <SettingsView statuses={statuses} settings={settings} onSaveSettings={handleSaveSettings} onSaveStatus={handleSaveStatus} onDeleteStatus={handleDeleteStatus} onRestartTour={handleRestartTour} />}
+        {activeTab === 'settings' && <SettingsView statuses={statuses} settings={settings} onSaveSettings={handleSaveSettings} onSaveStatus={handleSaveStatus} onDeleteStatus={handleDeleteStatus} onRestartTour={handleRestartTour} onLogout={handleLogout} />}
 
         <OnboardingTour isOpen={showTour} onClose={handleTourClose} />
 
