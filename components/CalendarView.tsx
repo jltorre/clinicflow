@@ -58,6 +58,17 @@ const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
 };
 
+// Helper: Extract color name and return 500 shade for dots
+const getContrastColor = (bgClass: string) => {
+    if (!bgClass) return 'bg-gray-500';
+    // Matches 'bg-color-numer' -> extracts 'color'
+    const match = bgClass.match(/bg-([a-z]+)-/);
+    if (match && match[1]) {
+        return `bg-${match[1]}-500`;
+    }
+    return 'bg-gray-500';
+};
+
 export const CalendarView: React.FC<CalendarViewProps> = ({ 
   appointments, 
   clients, 
@@ -451,7 +462,30 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                 <tr key={apt.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                     <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-900 dark:text-white">{format(new Date(apt.date), 'dd MMM yyyy', {locale: es})}</div><div className="text-sm text-gray-600 dark:text-gray-400">{formatTime(apt.startTime)}</div></td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white font-medium"><button onClick={() => onViewClient(apt.clientId)} className="hover:underline hover:text-teal-600">{apt.clientName}</button></td>
-                                    <td className="px-6 py-4 whitespace-nowrap"><span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${bgClass} ${textClass}`}>{apt.serviceName}</span></td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-wrap gap-1">
+                                            {(apt.serviceItems && apt.serviceItems.length > 0) ? (
+                                                apt.serviceItems.map((item, idx) => {
+                                                    // Robust fallback logic for colors
+                                                    let sDef = services.find(s => s.id === item.serviceId);
+                                                    if (!sDef) sDef = services.find(s => s.name === item.name);
+                                                    
+                                                    const pillBg = sDef?.color.split(' ')[0] || 'bg-gray-100';
+                                                    const pillText = sDef?.color.split(' ')[1] || 'text-gray-800';
+                                                    
+                                                    return (
+                                                        <span key={idx} className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full whitespace-nowrap ${pillBg} ${pillText}`}>
+                                                            {item.name}
+                                                        </span>
+                                                    );
+                                                })
+                                            ) : (
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full whitespace-nowrap ${bgClass} ${textClass}`}>
+                                                    {apt.serviceName}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap">{staffMember ? (<div className="flex items-center"><div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-2 ${staffMember.color}`}>{staffMember.name.charAt(0)}</div><span className="text-sm text-gray-700 dark:text-gray-300">{apt.staffName}</span></div>) : <span className="text-sm text-gray-500 dark:text-gray-400">-</span>}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{formatCurrency(apt.price + (apt.inventoryTotal || 0))}</td>
                                     <td className="px-6 py-4 whitespace-nowrap"><span className={`px-2 py-1 rounded text-xs font-medium ${status?.color || 'bg-gray-100 text-gray-700'}`}>{apt.statusName}</span></td>
@@ -499,8 +533,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                           {dayApts.map(apt => {
                                               const service = getService(apt.serviceTypeId); const status = getStatus(apt.statusId);
                                               return (
-                                                  <div key={apt.id} draggable onDragStart={(e) => handleDragStart(e, apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt); }} className={`text-[10px] px-1.5 py-0.5 rounded truncate cursor-pointer shadow-sm border-l-2 ${service?.color.split(' ')[0]} ${service?.color.split(' ')[1]} ${status?.isBillable ? 'border-l-emerald-500' : 'border-l-transparent'}`}>
-                                                      {formatTime(apt.startTime)} {getClientName(apt.clientId)}
+                                                  <div key={apt.id} draggable onDragStart={(e) => handleDragStart(e, apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt); }} className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer shadow-sm border-l-2 flex items-center justify-between gap-1 ${service?.color.split(' ')[0]} ${service?.color.split(' ')[1]} ${status?.isBillable ? 'border-l-emerald-500' : 'border-l-transparent'}`}>
+                                                      <span className="truncate">{formatTime(apt.startTime)} {getClientName(apt.clientId)}</span>
+                                                      {(apt.serviceItems && apt.serviceItems.length > 1) && (
+                                                          <div className="flex -space-x-0.5 shrink-0">
+                                                              {apt.serviceItems.slice(1).map((sItem, idx) => {
+                                                                    let sDef = services.find(s => s.id === sItem.serviceId);
+                                                                    if (!sDef) sDef = services.find(s => s.name === sItem.name);
+                                                                    const dotColor = getContrastColor(sDef?.color || '');
+                                                                    return <div key={idx} className={`w-1.5 h-1.5 rounded-full ${dotColor} border border-white/40 ring-0`} title={sItem.name}></div>
+                                                              })}
+                                                          </div>
+                                                      )}
                                                   </div>
                                               )
                                           })}
@@ -643,14 +687,47 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                                 {height < 40 ? (
                                                     <div className="flex items-center gap-1 h-full pointer-events-none">
                                                         <span className="font-bold text-[10px] shrink-0">{formatTime(apt.startTime)}</span>
-                                                        <span className="font-bold text-[10px] truncate leading-tight flex-1">{getClientName(apt.clientId)}</span>
+                                                        <div className="flex-1 min-w-0 flex items-center gap-1">
+                                                            <span className="font-bold text-[10px] truncate leading-tight">{getClientName(apt.clientId)}</span>
+                                                            {(apt.serviceItems && apt.serviceItems.length > 1) && (
+                                                                <div className="flex gap-0.5 shrink-0">
+                                                                    {apt.serviceItems.slice(1).map((sItem, idx) => {
+                                                                         let sDef = services.find(s => s.id === sItem.serviceId);
+                                                                         if (!sDef) sDef = services.find(s => s.name === sItem.name);
+                                                                         const dotColor = getContrastColor(sDef?.color || '');
+                                                                         return <div key={idx} className={`w-1.5 h-1.5 rounded-full ${dotColor} border border-white/50`} title={sItem.name}></div>
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                         {status?.isBillable && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></div>}
                                                     </div>
                                                 ) : (
                                                     <>
                                                         <div className="flex justify-between items-start text-xs pointer-events-none transition-opacity"><span className="font-bold">{formatTime(apt.startTime)}</span>{status?.isBillable && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>}</div>
                                                         <div className="font-bold text-xs truncate leading-tight mt-0.5 pointer-events-none">{getClientName(apt.clientId)}</div>
-                                                        <div className="text-[10px] opacity-80 truncate pointer-events-none">{service?.name}</div>
+                                                        <div className="text-[10px] opacity-80 truncate pointer-events-none flex items-center gap-1">
+                                                            <span>{service?.name}</span>
+                                                            {(apt.serviceItems && apt.serviceItems.length > 1) && (
+                                                                <span className="text-[9px] opacity-75">+{apt.serviceItems.length - 1}</span>
+                                                            )}
+                                                        </div>
+                                                        
+                                                        {/* Dots for multi-service */}
+                                                        {(apt.serviceItems && apt.serviceItems.length > 1) && (
+                                                            <div className="flex flex-wrap gap-1 mt-1 pointer-events-none absolute bottom-1 left-2 max-w-[70%]">
+                                                                {apt.serviceItems.map((sItem, idx) => {
+                                                                     // Skip primary (already shown as background) or show all? 
+                                                                     // User said "leave color of first, put dots for rest", but dots for ALL is clearer for "what services are inside".
+                                                                     // Let's show dots for ALL to be explicit about complexity.
+                                                                     let sDef = services.find(s => s.id === sItem.serviceId);
+                                                                     if (!sDef) sDef = services.find(s => s.name === sItem.name);
+                                                                     const dotColor = getContrastColor(sDef?.color || '');
+                                                                     return <div key={idx} className={`w-2 h-2 rounded-full ${dotColor} border border-white shadow-sm`} title={sItem.name}></div>
+                                                                })}
+                                                            </div>
+                                                        )}
+
                                                         {staffMember && height > 55 && (<div className="absolute bottom-1 right-1"><div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold ${staffMember.color}`}>{staffMember.name.charAt(0)}</div></div>)}
                                                     </>
                                                 )}
@@ -692,7 +769,23 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                                    <span className="font-bold text-sm">{formatTime(apt.startTime)}</span>
                                                    <span className="text-[10px] text-gray-600 dark:text-gray-400">{apt.durationMinutes}m</span>
                                                </div>
-                                               <div className="min-w-0"><h4 className="font-bold text-sm truncate">{getClientName(apt.clientId)}</h4><p className="text-xs text-gray-700 dark:text-gray-300 truncate">{service?.name}</p>{staffMember && <p className="text-[10px] text-gray-600 dark:text-gray-400 flex items-center mt-0.5"><User className="w-3 h-3 mr-1"/> {staffMember.name}</p>}</div>
+                                               <div className="min-w-0">
+                                                   <h4 className="font-bold text-sm truncate">{getClientName(apt.clientId)}</h4>
+                                                   <div className="flex items-center gap-2">
+                                                       <p className="text-xs text-gray-700 dark:text-gray-300 truncate">{service?.name}</p>
+                                                       {(apt.serviceItems && apt.serviceItems.length > 1) && (
+                                                           <div className="flex gap-1">
+                                                               {apt.serviceItems.map((sItem, idx) => {
+                                                                    let sDef = services.find(s => s.id === sItem.serviceId);
+                                                                    if (!sDef) sDef = services.find(s => s.name === sItem.name);
+                                                                    const dotColor = getContrastColor(sDef?.color || '');
+                                                                    return <div key={idx} className={`w-1.5 h-1.5 rounded-full ${dotColor}`} title={sItem.name}></div>
+                                                               })}
+                                                           </div>
+                                                       )}
+                                                   </div>
+                                                   {staffMember && <p className="text-[10px] text-gray-600 dark:text-gray-400 flex items-center mt-0.5"><User className="w-3 h-3 mr-1"/> {staffMember.name}</p>}
+                                               </div>
                                            </div>
                                            {status && (<span className={`text-[10px] px-2 py-0.5 rounded-full ${status.color}`}>{status.name}</span>)}
                                         </div>

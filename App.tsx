@@ -413,7 +413,8 @@ const App: React.FC = () => {
         bookingFeeAmount: settings.defaultBookingFee, // Using the global setting value here
         notes: '',
         endTime: `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`,
-        serviceItems: initialServiceItems
+        serviceItems: initialServiceItems,
+        paymentMethod: 'card'
       });
     }
     setAptModalOpen(true);
@@ -427,30 +428,49 @@ const App: React.FC = () => {
 
 // ... (skipping down to JSX update) ...
 
-                        {(aptForm.serviceItems || []).map((service) => (
-                            <div key={service.instanceId} className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-teal-50 dark:from-blue-900/20 dark:to-teal-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
-                                <div className="flex-1">
-                                    <p className="font-medium text-gray-800 dark:text-gray-200">{service.name}</p>
-                                    <p className="text-xs text-gray-600 dark:text-gray-400">{service.durationMinutes} min</p>
+                        {(aptForm.serviceItems || []).map((serviceItem) => {
+                            let serviceDef = services.find(s => s.id === serviceItem.serviceId);
+                            // Fallback: If ID not found (e.g. service deleted and re-created), try to match by name to get the correct color
+                            if (!serviceDef) {
+                                serviceDef = services.find(s => s.name === serviceItem.name);
+                            }
+                            
+                            // Default to a blue pill if no color is defined
+                            const pillClass = (serviceDef?.color && serviceDef.color.length > 5) 
+                                ? serviceDef.color 
+                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+
+                            return (
+                                <div key={serviceItem.instanceId} className="flex items-center gap-2 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                                    <div className="flex-1">
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium ${pillClass}`}>
+                                            {serviceItem.name}
+                                        </span>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-1">{serviceItem.durationMinutes} min</p>
+                                    </div>
+                                    <input 
+                                        type="number" 
+                                        min="0" 
+                                        step="0.01"
+                                        className="w-24 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
+                                        value={isNaN(serviceItem.unitPrice) ? '' : serviceItem.unitPrice}
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            const newPrice = val === '' ? 0 : parseFloat(val);
+                                            handleUpdateServicePrice(serviceItem.instanceId!, isNaN(newPrice) ? 0 : newPrice);
+                                        }}
+                                    />
+                                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">€</span>
+                                    <button 
+                                        type="button"
+                                        onClick={() => handleRemoveServiceFromApt(serviceItem.instanceId!)}
+                                        className="text-gray-400 hover:text-red-600 dark:hover:text-red-400 p-1 transition-colors"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
                                 </div>
-                                <input 
-                                    type="number" 
-                                    min="0" 
-                                    step="0.01"
-                                    className="w-24 px-2 py-1 text-sm border rounded dark:bg-gray-800 dark:border-gray-600"
-                                    value={service.unitPrice}
-                                    onChange={e => handleUpdateServicePrice(service.instanceId!, Number(e.target.value))}
-                                />
-                                <span className="text-sm font-medium">€</span>
-                                <button 
-                                    type="button"
-                                    onClick={() => handleRemoveServiceFromApt(service.instanceId!)}
-                                    className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
-                        ))}
+                            );
+                        })}
 
   useEffect(() => {
     if (isAptModalOpen && !editingApt && aptForm.clientId && aptForm.serviceTypeId) {
@@ -612,7 +632,10 @@ const App: React.FC = () => {
       bookingFeeAmount: Number(aptForm.bookingFeeAmount) || 0,
       notes: aptForm.notes || '',
       inventoryItems: aptForm.inventoryItems || [],
-      inventoryTotal: aptForm.inventoryTotal || 0
+      inventoryTotal: aptForm.inventoryTotal || 0,
+      serviceItems: aptForm.serviceItems || [],
+      paymentMethod: aptForm.paymentMethod,
+      bookingFeePaymentMethod: aptForm.bookingFeePaymentMethod
     }, uid);
 
     // Stock Management Logic
@@ -1274,32 +1297,51 @@ const App: React.FC = () => {
                                 </p>
                             )}
                             
-                            {(aptForm.serviceItems || []).map((service) => (
-                                <div key={service.instanceId} className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-teal-50 dark:from-blue-900/20 dark:to-teal-900/20 p-2 rounded-lg border border-blue-200 dark:border-blue-800">
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-medium text-sm text-gray-800 dark:text-gray-200 truncate">{service.name}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">{service.durationMinutes} min</p>
+                            {(aptForm.serviceItems || []).map((serviceItem) => {
+                                let serviceDef = services.find(s => s.id === serviceItem.serviceId);
+                                // Fallback: If ID not found (e.g. service deleted and re-created), try to match by name
+                                if (!serviceDef) {
+                                    serviceDef = services.find(s => s.name === serviceItem.name);
+                                }
+
+                                // Default to a blue pill if no color is defined
+                                const pillClass = (serviceDef?.color && serviceDef.color.length > 5) 
+                                    ? serviceDef.color 
+                                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+
+                                return (
+                                    <div key={serviceItem.instanceId} className="flex items-center gap-2 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                                        <div className="flex-1">
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium ${pillClass}`}>
+                                                {serviceItem.name}
+                                            </span>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-1">{serviceItem.durationMinutes} min</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <input 
+                                                type="number" 
+                                                min="0" 
+                                                step="0.01"
+                                                className="w-20 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-right"
+                                                value={isNaN(serviceItem.unitPrice) ? '' : serviceItem.unitPrice}
+                                                onChange={e => {
+                                                    const val = e.target.value;
+                                                    const newPrice = val === '' ? 0 : parseFloat(val);
+                                                    handleUpdateServicePrice(serviceItem.instanceId!, isNaN(newPrice) ? 0 : newPrice);
+                                                }}
+                                            />
+                                            <span className="text-sm font-medium text-gray-500">€</span>
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleRemoveServiceFromApt(serviceItem.instanceId!)}
+                                                className="text-gray-400 hover:text-red-600 dark:hover:text-red-400 p-1 transition-colors"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <input 
-                                            type="number" 
-                                            min="0" 
-                                            step="0.01"
-                                            className="w-20 px-2 py-1 text-sm border rounded dark:bg-gray-800 dark:border-gray-600 text-right"
-                                            value={service.unitPrice}
-                                            onChange={e => handleUpdateServicePrice(service.instanceId!, Number(e.target.value))}
-                                        />
-                                        <span className="text-xs font-medium">€</span>
-                                        <button 
-                                            type="button"
-                                            onClick={() => handleRemoveServiceFromApt(service.instanceId!)}
-                                            className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1"
-                                        >
-                                            <X className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                             
                             {(aptForm.serviceItems || []).length > 0 && (
                                 <div className="flex justify-between items-center pt-2">
@@ -1367,48 +1409,114 @@ const App: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Financial Summary */}
-                    <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg flex flex-col gap-1 border border-gray-200 dark:border-gray-600">
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                            <div className="flex-1">
-                                <label className="text-xs font-medium block">Descuento (%)</label>
-                                <input 
-                                    type="number" 
-                                    min="0" 
-                                    max="100" 
-                                    className="w-full text-sm border rounded p-1"
-                                    value={aptForm.discountPercentage || 0} 
-                                    onChange={e => {
-                                        const newDiscount = Number(e.target.value);
-                                        const newFinalPrice = calculateFinalPrice(aptForm.basePrice, newDiscount);
-                                        setAptForm(prev => ({...prev, discountPercentage: newDiscount, price: newFinalPrice}));
-                                    }} 
-                                />
+                    {/* Financial Summary Redesigned */}
+                    <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg flex flex-col gap-2 border border-gray-200 dark:border-gray-600">
+                         <div className="space-y-1 text-sm">
+                            <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                                <span>Subtotal Tratamientos:</span>
+                                <span>{formatCurrency(aptForm.basePrice)}</span>
                             </div>
-                            <div className="flex-1 text-right">
-                                <label className="flex items-center justify-end gap-1 text-xs cursor-pointer select-none">
+                            {(aptForm.inventoryTotal || 0) > 0 && (
+                                <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                                    <span>Productos:</span>
+                                    <span>{formatCurrency(aptForm.inventoryTotal || 0)}</span>
+                                </div>
+                            )}
+                            <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+                             <div className="flex justify-between items-center">
+                                <span className="text-gray-600 dark:text-gray-400">Descuento (%)</span>
+                                <div className="flex items-center gap-2">
+                                     <input 
+                                        type="number" 
+                                        min="0" 
+                                        max="100" 
+                                        className="w-16 text-right text-sm border rounded p-0.5 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+                                        value={aptForm.discountPercentage || 0} 
+                                        onChange={e => {
+                                            const newDiscount = Number(e.target.value);
+                                            const newFinalPrice = calculateFinalPrice(aptForm.basePrice, newDiscount);
+                                            setAptForm(prev => ({...prev, discountPercentage: newDiscount, price: newFinalPrice}));
+                                        }} 
+                                    />
+                                    <span className="w-16 text-right text-red-500 text-xs">
+                                        {(aptForm.discountPercentage && aptForm.discountPercentage > 0) ? `-${formatCurrency((aptForm.basePrice * (aptForm.discountPercentage/100)))}` : ''}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded-md border border-blue-100 dark:border-blue-800/30">
+                                <label className="flex items-center gap-2 cursor-pointer select-none text-gray-700 dark:text-gray-300">
                                     <input 
                                         type="checkbox" 
-                                        className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 w-3 h-3"
+                                        className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 w-4 h-4"
                                         checked={aptForm.bookingFeePaid || false}
                                         onChange={e => setAptForm({...aptForm, bookingFeePaid: e.target.checked})}
                                     />
-                                    <span className="text-blue-700 dark:text-blue-300">Reserva Pagada</span>
+                                    <span className="font-semibold text-blue-800 dark:text-blue-300">Reserva</span>
                                 </label>
-                                {aptForm.bookingFeePaid && (
-                                     <input 
-                                        type="number" 
-                                        className="w-full text-sm border rounded p-1 mt-1 text-right"
-                                        value={aptForm.bookingFeeAmount || 0}
-                                        onChange={e => setAptForm({...aptForm, bookingFeeAmount: Number(e.target.value)})}
-                                    />
-                                )}
+                                <div className="flex items-center gap-2">
+                                    {aptForm.bookingFeePaid && (
+                                        <>
+                                         <div className="flex bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 p-0.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => setAptForm({...aptForm, bookingFeePaymentMethod: 'card'})}
+                                                className={`px-2 py-0.5 text-[10px] rounded transition-all ${(!aptForm.bookingFeePaymentMethod || aptForm.bookingFeePaymentMethod === 'card') ? 'bg-blue-100 text-blue-700 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                title="Pago con Tarjeta"
+                                            >
+                                                T
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setAptForm({...aptForm, bookingFeePaymentMethod: 'cash'})}
+                                                className={`px-2 py-0.5 text-[10px] rounded transition-all ${aptForm.bookingFeePaymentMethod === 'cash' ? 'bg-emerald-100 text-emerald-700 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                title="Pago en Efectivo"
+                                            >
+                                                E
+                                            </button>
+                                         </div>
+                                         <input 
+                                            type="number" 
+                                            className="w-16 text-right text-sm border rounded p-0.5 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 font-medium"
+                                            value={aptForm.bookingFeeAmount || 0}
+                                            onChange={e => setAptForm({...aptForm, bookingFeeAmount: Number(e.target.value)})}
+                                        />
+                                        <span className="w-16 text-right text-teal-600 dark:text-teal-400 text-xs font-medium">
+                                            -{formatCurrency(aptForm.bookingFeeAmount || 0)}
+                                        </span>
+                                        </>
+                                    )}
+                                </div>
                             </div>
-                        </div>
+                         </div>
 
-                        <div className="border-t border-gray-200 dark:border-gray-600 pt-2 flex justify-between text-base font-bold text-gray-900 dark:text-white">
-                            <span>Total a Cobrar:</span>
-                            <span>{formatCurrency((aptForm.price || 0) + (aptForm.inventoryTotal || 0) - (aptForm.bookingFeePaid ? (aptForm.bookingFeeAmount || 0) : 0))}</span>
+                        <div className="border-t-2 border-dashed border-gray-300 dark:border-gray-600 pt-3 mt-1 flex justify-between items-center">
+                            <div className="flex flex-col gap-1">
+                                <span className="text-sm font-bold text-gray-900 dark:text-white">TOTAL PENDIENTE (A COBRAR)</span>
+                                <div className="flex bg-gray-200 dark:bg-gray-700 rounded-lg p-0.5 w-fit">
+                                    <button
+                                        type="button"
+                                        onClick={() => setAptForm({...aptForm, paymentMethod: 'card'})}
+                                        className={`px-3 py-1 text-xs rounded-md transition-all ${aptForm.paymentMethod !== 'cash' ? 'bg-white dark:bg-gray-600 shadow text-teal-600 dark:text-teal-400 font-bold' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+                                    >
+                                        Tarjeta
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAptForm({...aptForm, paymentMethod: 'cash'})}
+                                        className={`px-3 py-1 text-xs rounded-md transition-all ${aptForm.paymentMethod === 'cash' ? 'bg-white dark:bg-gray-600 shadow text-teal-600 dark:text-teal-400 font-bold' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+                                    >
+                                        Efectivo
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-2xl font-black text-gray-900 dark:text-white">
+                                    {formatCurrency((aptForm.price || 0) + (aptForm.inventoryTotal || 0) - (aptForm.bookingFeePaid ? (aptForm.bookingFeeAmount || 0) : 0))}
+                                </div>
+                                <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                                   en Clinica
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

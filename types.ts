@@ -67,6 +67,8 @@ export interface Appointment {
   inventoryItems?: AppointmentInventorySale[]; // Items sold during the appointment
   inventoryTotal?: number; // Total amount from inventory items
   serviceItems?: AppointmentServiceItem[]; // NEW: Multiple services per appointment
+  paymentMethod?: 'cash' | 'card'; // NEW: Payment method for the remaining balance
+  bookingFeePaymentMethod?: 'cash' | 'card'; // NEW: Payment method specifically for the booking fee
 }
 
 export interface InventoryItem {

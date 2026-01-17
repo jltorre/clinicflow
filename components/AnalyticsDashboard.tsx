@@ -304,6 +304,8 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
         let cost = 0;
         let attendedClientIds = new Set<string>();
         let totalHours = 0;
+        let cashRevenue = 0;
+        let cardRevenue = 0;
 
         filteredAppointments.forEach(apt => {
             const status = statuses.find(s => s.id === apt.statusId);
@@ -319,14 +321,42 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
                 return acc + (item ? item.costPrice * sale.quantity : 0);
             }, 0);
 
+            // Determine payment method for the "in-clinic" payment
+            const method = apt.paymentMethod || 'card';
+
             if (status?.isBillable) {
-                revenue += apt.price + appointmentProductRevenue;
+                const totalForApt = apt.price + appointmentProductRevenue;
+                revenue += totalForApt;
+                
+                // If booking fee was paid, subtract it from the "in-clinic" payment
+                const prepaid = apt.bookingFeePaid ? (apt.bookingFeeAmount || 0) : 0;
+                const remainder = totalForApt - prepaid;
+
+                // Handle Booking Fee Payment Method
+                if (prepaid > 0) {
+                    // Default to 'card' if not specified (legacy behavior for "Paid Online")
+                    const feeMethod = apt.bookingFeePaymentMethod || 'card';
+                    if (feeMethod === 'cash') cashRevenue += prepaid;
+                    else cardRevenue += prepaid;
+                }
+
+                // Handle Remainder Payment Method
+                const remainderMethod = apt.paymentMethod || 'card';
+                if (method === 'cash') cashRevenue += remainder; // Note: 'method' var was defined as apt.paymentMethod above in original code, ensuring consistency
+                else cardRevenue += remainder;
+
                 cost += appointmentProductCost;
                 attendedClientIds.add(apt.clientId);
                 totalHours += apt.durationMinutes / 60;
             } else {
                 if (apt.bookingFeePaid) {
                     revenue += apt.bookingFeeAmount;
+                    
+                     // Default to 'card' if not specified
+                    const feeMethod = apt.bookingFeePaymentMethod || 'card';
+                    if (feeMethod === 'cash') cashRevenue += apt.bookingFeeAmount;
+                    else cardRevenue += apt.bookingFeeAmount;
+
                     pending += (apt.price - apt.bookingFeeAmount) + appointmentProductRevenue;
                 } else {
                     pending += apt.price + appointmentProductRevenue;
@@ -344,7 +374,7 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
         const attendedClientsCount = attendedClientIds.size;
 
         return {
-            revenue, pending, cost, profit, attendedClientsCount, totalHours,
+            revenue, pending, cost, profit, attendedClientsCount, totalHours, cashRevenue, cardRevenue,
             profitPerClient: attendedClientsCount > 0 ? profit / attendedClientsCount : 0,
             profitPerHour: totalHours > 0 ? profit / totalHours : 0
         };
@@ -570,7 +600,17 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
                             <span className="text-xs font-medium bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full text-gray-600 dark:text-gray-300">Realizado</span>
                         </div>
                         <div className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(summaryMetrics.revenue)}</div>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Cobrado (incl. reservas)</p>
+                        <div className="flex items-center gap-3 mt-1">
+                             <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-teal-500"></span>
+                                {formatCurrency(summaryMetrics.cardRevenue)} (T)
+                             </div>
+                             <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                {formatCurrency(summaryMetrics.cashRevenue)} (E)
+                             </div>
+                        </div>
+                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Cobrado (incl. reservas)</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
                         <div className="flex justify-between items-start mb-2">
