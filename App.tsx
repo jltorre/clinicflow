@@ -1023,6 +1023,13 @@ const App: React.FC = () => {
             ))}
         </div>
 
+        <MoveCopyModal 
+            isOpen={moveRequest !== null} 
+            onClose={() => setMoveRequest(null)} 
+            onMove={executeMove} 
+            onCopy={executeCopy} 
+        />
+
         <Modal isOpen={isAptModalOpen} onClose={() => setAptModalOpen(false)} title={editingApt ? "Editar Cita" : "Nueva Cita"}>
             <form onSubmit={handleSaveApt} className="space-y-4">
                 <div>

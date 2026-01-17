@@ -537,6 +537,79 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                         {nowTop !== null && (<div className="absolute left-0 right-0 z-30 pointer-events-none flex items-center" style={{ top: nowTop }}><div className="w-full border-t-2 border-red-500 opacity-60"></div><div className="absolute -left-1 w-2 h-2 rounded-full bg-red-500"></div></div>)}
                         {visibleDays.map(day => {
                             const dayAppointments = getAppointmentsForDay(day);
+                            
+                            // Calculate column layout for overlapping appointments
+                            const calculateColumnLayout = (appointments: typeof dayAppointments) => {
+                                const layout = new Map<string, { column: number; totalColumns: number }>();
+                                
+                                // Sort appointments by start time
+                                const sorted = [...appointments].sort((a, b) => {
+                                    const aTime = parseInt(a.startTime.replace(':', ''));
+                                    const bTime = parseInt(b.startTime.replace(':', ''));
+                                    return aTime - bTime;
+                                });
+                                
+                                type AppointmentType = typeof sorted[number];
+                                
+                                // Helper to check if two appointments overlap
+                                const overlaps = (apt1: AppointmentType, apt2: AppointmentType) => {
+                                    const start1 = parseInt(apt1.startTime.replace(':', ''));
+                                    const end1 = start1 + apt1.durationMinutes;
+                                    const start2 = parseInt(apt2.startTime.replace(':', ''));
+                                    const end2 = start2 + apt2.durationMinutes;
+                                    return start1 < end2 && start2 < end1;
+                                };
+                                
+                                // Find overlapping groups
+                                const groups: AppointmentType[][] = [];
+                                sorted.forEach(apt => {
+                                    let added = false;
+                                    for (const group of groups) {
+                                        if (group.some(g => overlaps(g, apt))) {
+                                            group.push(apt);
+                                            added = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!added) {
+                                        groups.push([apt]);
+                                    }
+                                });
+                                
+                                // Assign columns within each group
+                                groups.forEach(group => {
+                                    const columns: AppointmentType[][] = [];
+                                    group.forEach(apt => {
+                                        let placed = false;
+                                        for (let i = 0; i < columns.length; i++) {
+                                            if (!columns[i].some(colApt => overlaps(colApt, apt))) {
+                                                columns[i].push(apt);
+                                                layout.set(apt.id, { column: i, totalColumns: 0 }); // Will update totalColumns later
+                                                placed = true;
+                                                break;
+                                            }
+                                        }
+                                        if (!placed) {
+                                            columns.push([apt]);
+                                            layout.set(apt.id, { column: columns.length - 1, totalColumns: 0 });
+                                        }
+                                    });
+                                    
+                                    // Update totalColumns for all appointments in this group
+                                    const totalCols = columns.length;
+                                    group.forEach(apt => {
+                                        const current = layout.get(apt.id);
+                                        if (current) {
+                                            layout.set(apt.id, { ...current, totalColumns: totalCols });
+                                        }
+                                    });
+                                });
+                                
+                                return layout;
+                            };
+                            
+                            const columnLayout = calculateColumnLayout(dayAppointments);
+                            
                             return (
                                 <div key={day.toISOString()} className="relative border-l border-gray-100 dark:border-gray-700 group">
                                     {TIME_SLOTS.map(hour => (
@@ -545,8 +618,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                     {dayAppointments.map(apt => {
                                         const isResizing = resizingAptId === apt.id; const top = getTopOffset(apt.startTime); const height = isResizing && tempResizeHeight ? tempResizeHeight : (apt.durationMinutes / 60) * slotHeight; const visualTop = isResizing && tempResizeTop ? top + tempResizeTop : top; const service = getService(apt.serviceTypeId); const status = getStatus(apt.statusId); const staffMember = getStaff(apt.staffId || '');
                                         if (top === -1) return null;
+                                        
+                                        // Get column layout for this appointment
+                                        const colInfo = columnLayout.get(apt.id) || { column: 0, totalColumns: 1 };
+                                        const columnWidth = 100 / colInfo.totalColumns;
+                                        const leftPosition = colInfo.column * columnWidth;
+                                        
                                         return (
-                                            <div key={apt.id} draggable={!isResizing} onDragStart={(e) => handleDragStart(e, apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt); }} className={`absolute inset-x-1 rounded-md px-2 py-1 shadow-sm border-l-[3px] cursor-pointer z-10 overflow-hidden transition-shadow ${service?.color.split(' ')[0] || 'bg-gray-100'} ${service?.color.split(' ')[1] || 'text-gray-800'} ${status?.isBillable ? 'ring-1 ring-emerald-400 ring-opacity-50' : ''} ${isResizing ? 'shadow-lg z-50 opacity-90 scale-[1.02]' : 'hover:shadow-md'}`} style={{ top: visualTop, height: Math.max(height, 28), cursor: isResizing ? 'row-resize' : 'grab' }}>
+                                            <div key={apt.id} draggable={!isResizing} onDragStart={(e) => handleDragStart(e, apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt); }} className={`absolute rounded-md px-2 py-1 shadow-sm border-l-[3px] cursor-pointer z-10 overflow-hidden transition-shadow ${service?.color.split(' ')[0] || 'bg-gray-100'} ${service?.color.split(' ')[1] || 'text-gray-800'} ${status?.isBillable ? 'ring-1 ring-emerald-400 ring-opacity-50' : ''} ${isResizing ? 'shadow-lg z-50 opacity-90 scale-[1.02]' : 'hover:shadow-md'}`} style={{ top: visualTop, height: Math.max(height, 28), left: `${leftPosition}%`, width: `${columnWidth - 1}%`, cursor: isResizing ? 'row-resize' : 'grab' }}>
                                                 <div className="absolute top-0 left-0 right-0 h-1.5 cursor-ns-resize z-20 hover:bg-black/5" onMouseDown={(e) => handleResizeStart(e, apt, 'top')} />
                                                 <div className="flex justify-between items-start text-xs pointer-events-none"><span className="font-bold">{apt.startTime}</span>{status?.isBillable && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>}</div>
                                                 <div className="font-bold text-xs truncate leading-tight mt-0.5 pointer-events-none">{getClientName(apt.clientId)}</div>
