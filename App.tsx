@@ -288,6 +288,37 @@ const App: React.FC = () => {
   const [inventoryForm, setInventoryForm] = useState<Partial<InventoryItem>>({});
   
   const [pendingAppointmentContext, setPendingAppointmentContext] = useState<PendingAppointmentContext | null>(null);
+  
+  // Quick Client Creation State
+  const [isQuickClientModalOpen, setIsQuickClientModalOpen] = useState(false);
+  const [quickClientForm, setQuickClientForm] = useState({ name: '', email: '', phone: '' });
+
+  const handleSaveQuickClient = async (e: React.FormEvent) => {
+      e.preventDefault();
+      const uid = getUid();
+      if (!uid) return;
+
+      const newClient: Client = {
+          id: crypto.randomUUID(),
+          name: quickClientForm.name,
+          email: quickClientForm.email,
+          phone: quickClientForm.phone,
+          createdAt: Date.now(),
+          notes: ''
+      };
+
+      await dataService.saveClient(newClient, uid);
+      
+      // Update local state
+      setClients(prev => [...prev, newClient]);
+      
+      // Auto-select in appointment form
+      setAptForm(prev => ({...prev, clientId: newClient.id}));
+      
+      // Close and reset
+      setIsQuickClientModalOpen(false);
+      setQuickClientForm({ name: '', email: '', phone: '' });
+  };
 
   const getUid = () => isGuest ? 'guest' : user?.uid;
   const handleLogout = () => { 
@@ -1199,14 +1230,26 @@ const App: React.FC = () => {
                     
                     <div>
                         <label className={labelClass}>Cliente</label>
-                        <ClientSelect 
-                            clients={clients}
-                            appointments={appointments}
-                            statuses={statuses}
-                            value={aptForm.clientId || ''}
-                            onChange={(id) => setAptForm(prev => ({...prev, clientId: id}))}
-                            required
-                        />
+                        <div className="flex gap-2">
+                           <div className="flex-1">
+                                <ClientSelect 
+                                    clients={clients}
+                                    appointments={appointments}
+                                    statuses={statuses}
+                                    value={aptForm.clientId || ''}
+                                    onChange={(id) => setAptForm(prev => ({...prev, clientId: id}))}
+                                    required
+                                />
+                           </div>
+                           <button 
+                                type="button" 
+                                onClick={() => setIsQuickClientModalOpen(true)}
+                                className="px-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors flex items-center justify-center"
+                                title="Crear Cliente Rápido"
+                           >
+                               <Plus className="w-5 h-5" />
+                           </button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-[1fr_1.5fr] gap-4">
@@ -1674,6 +1717,24 @@ const App: React.FC = () => {
                 </div>
                 <div><label className={labelClass}>Descripción</label><textarea className={`${inputClass} h-20`} value={inventoryForm.description || ''} onChange={e => setInventoryForm({...inventoryForm, description: e.target.value})} placeholder="Detalles del producto..." /></div>
                 <button type="submit" className="w-full bg-teal-600 text-white p-3 rounded-lg font-bold shadow-lg hover:bg-teal-700 transition-colors mt-2">Guardar Producto</button>
+            </form>
+        </Modal>
+
+        <Modal isOpen={isQuickClientModalOpen} onClose={() => setIsQuickClientModalOpen(false)} title="Nuevo Cliente Rápido" maxWidth="max-w-md">
+            <form onSubmit={handleSaveQuickClient} className="space-y-4">
+                <div>
+                    <label className={labelClass}>Nombre *</label>
+                    <input type="text" required className={inputClass} value={quickClientForm.name} onChange={e => setQuickClientForm({...quickClientForm, name: e.target.value})} autoFocus />
+                </div>
+                <div>
+                    <label className={labelClass}>Teléfono</label>
+                    <input type="tel" className={inputClass} value={quickClientForm.phone} onChange={e => setQuickClientForm({...quickClientForm, phone: e.target.value})} />
+                </div>
+                <div>
+                    <label className={labelClass}>Email</label>
+                    <input type="email" className={inputClass} value={quickClientForm.email} onChange={e => setQuickClientForm({...quickClientForm, email: e.target.value})} />
+                </div>
+                <button type="submit" className="w-full bg-teal-600 text-white p-3 rounded-lg font-bold shadow-lg hover:bg-teal-700 transition-colors mt-2">Crear Cliente</button>
             </form>
         </Modal>
 
