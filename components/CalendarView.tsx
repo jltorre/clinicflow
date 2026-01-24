@@ -470,17 +470,25 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                                     let sDef = services.find(s => s.id === item.serviceId);
                                                     if (!sDef) sDef = services.find(s => s.name === item.name);
                                                     
-                                                    const pillBg = sDef?.color.split(' ')[0] || 'bg-gray-100';
-                                                    const pillText = sDef?.color.split(' ')[1] || 'text-gray-800';
+                                                    const isHex = sDef?.color?.startsWith('#');
+                                                    const pillBg = !isHex ? (sDef?.color.split(' ')[0] || 'bg-gray-100') : '';
+                                                    const pillText = !isHex ? (sDef?.color.split(' ')[1] || 'text-gray-800') : '';
                                                     
                                                     return (
-                                                        <span key={idx} className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full whitespace-nowrap ${pillBg} ${pillText}`}>
+                                                        <span 
+                                                            key={idx} 
+                                                            className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full whitespace-nowrap ${pillBg} ${pillText}`}
+                                                            style={isHex ? { backgroundColor: sDef?.color, color: 'white' } : {}}
+                                                        >
                                                             {item.name}
                                                         </span>
                                                     );
                                                 })
                                             ) : (
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full whitespace-nowrap ${bgClass} ${textClass}`}>
+                                                <span 
+                                                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full whitespace-nowrap ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[0] || 'bg-gray-100') : ''} ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[1] || 'text-gray-800') : ''}`}
+                                                    style={service?.color?.startsWith('#') ? { backgroundColor: service.color, color: 'white' } : {}}
+                                                >
                                                     {apt.serviceName}
                                                 </span>
                                             )}
@@ -533,7 +541,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                           {dayApts.map(apt => {
                                               const service = getService(apt.serviceTypeId); const status = getStatus(apt.statusId);
                                               return (
-                                                  <div key={apt.id} draggable onDragStart={(e) => handleDragStart(e, apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt); }} className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer shadow-sm border-l-2 flex items-center justify-between gap-1 ${service?.color.split(' ')[0]} ${service?.color.split(' ')[1]} ${status?.isBillable ? 'border-l-emerald-500' : 'border-l-transparent'}`}>
+                                                  <div key={apt.id} draggable onDragStart={(e) => handleDragStart(e, apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt); }} 
+                                                      className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer shadow-sm border-l-2 flex items-center justify-between gap-1 ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[0] || 'bg-gray-100') : ''} ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[1] || 'text-gray-800') : ''} ${status?.isBillable ? 'border-l-emerald-500' : 'border-l-transparent'}`}
+                                                      style={service?.color?.startsWith('#') ? { backgroundColor: service.color, color: 'white' } : {}}
+                                                  >
                                                       <span className="truncate">{formatTime(apt.startTime)} {getClientName(apt.clientId)}</span>
                                                       {(apt.serviceItems && apt.serviceItems.length > 1) && (
                                                           <div className="flex -space-x-0.5 shrink-0">
@@ -680,7 +691,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                         const leftPosition = colInfo.column * columnWidth;
                                         
                                         return (
-                                            <div key={apt.id} draggable={!isResizing} onDragStart={(e) => handleDragStart(e, apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt); }} className={`absolute rounded-md px-2 py-0.5 shadow-sm border-l-[3px] cursor-pointer z-10 overflow-hidden transition-shadow ${service?.color.split(' ')[0] || 'bg-gray-100'} ${service?.color.split(' ')[1] || 'text-gray-800'} ${status?.isBillable ? 'ring-1 ring-emerald-400 ring-opacity-50' : ''} ${isResizing ? 'shadow-lg z-50 opacity-90 scale-[1.02]' : 'hover:shadow-md'}`} style={{ top: visualTop, height: Math.max(height, 24), left: `${leftPosition}%`, width: `${columnWidth - 1}%`, cursor: isResizing ? 'row-resize' : 'grab' }}>
+                                            <div key={apt.id} draggable={!isResizing} onDragStart={(e) => handleDragStart(e, apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt); }} 
+                                                className={`absolute rounded-md px-2 py-0.5 shadow-sm border-l-[3px] cursor-pointer z-10 overflow-hidden transition-shadow ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[0] || 'bg-gray-100') : ''} ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[1] || 'text-gray-800') : ''} ${status?.isBillable ? 'ring-1 ring-emerald-400 ring-opacity-50' : ''} ${isResizing ? 'shadow-lg z-50 opacity-90 scale-[1.02]' : 'hover:shadow-md'}`} 
+                                                style={{ top: visualTop, height: Math.max(height, 24), left: `${leftPosition}%`, width: `${columnWidth - 1}%`, cursor: isResizing ? 'row-resize' : 'grab', ...(service?.color?.startsWith('#') ? { backgroundColor: service.color, color: 'white' } : {}) }}
+                                            >
                                                 <div className="absolute top-0 left-0 right-0 h-1.5 cursor-ns-resize z-20 hover:bg-black/5" onMouseDown={(e) => handleResizeStart(e, apt, 'top')} />
                                                 
                                                 {/* Contenido condicional según la altura */}

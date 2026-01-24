@@ -75,7 +75,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ clients,
       if (client.finishedTreatments?.includes(lastApt.serviceTypeId)) return null;
 
       const lastDate = new Date(lastApt.date);
-      const recommendedDate = addDays(lastDate, service.recurrenceDays);
+      if (isNaN(lastDate.getTime())) return null;
+
+      const recommendedDate = addDays(lastDate, service.recurrenceDays || 30); // Default to 30 if missing
+      if (isNaN(recommendedDate.getTime())) return null;
+
       const daysDiff = differenceInDays(today, recommendedDate);
 
       const threshold = service.upcomingThresholdDays || 7;

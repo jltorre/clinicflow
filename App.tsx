@@ -1603,31 +1603,50 @@ const App: React.FC = () => {
                 <div><label className={labelClass}>Nombre</label><input type="text" required className={inputClass} value={serviceForm.name || ''} onChange={e => setServiceForm({...serviceForm, name: e.target.value})} /></div>
                 <div>
                   <label className={labelClass}>Color</label>
-                  <div className="grid grid-cols-4 gap-2 mt-2">
+                    <div className="grid grid-cols-4 gap-2 mt-2">
                     {[
-                      { value: 'bg-blue-100 text-blue-800', label: 'Azul' },
-                      { value: 'bg-teal-100 text-teal-800', label: 'Turquesa' },
-                      { value: 'bg-purple-100 text-purple-800', label: 'Morado' },
-                      { value: 'bg-indigo-100 text-indigo-800', label: 'Índigo' },
-                      { value: 'bg-orange-100 text-orange-800', label: 'Naranja' },
-                      { value: 'bg-rose-100 text-rose-800', label: 'Rosa' },
-                      { value: 'bg-green-100 text-green-800', label: 'Verde' },
-                      { value: 'bg-amber-100 text-amber-800', label: 'Ámbar' },
-                      { value: 'bg-pink-100 text-pink-800', label: 'Rosa Fuerte' },
-                      { value: 'bg-cyan-100 text-cyan-800', label: 'Cian' },
-                      { value: 'bg-lime-100 text-lime-800', label: 'Lima' },
-                      { value: 'bg-emerald-100 text-emerald-800', label: 'Esmeralda' }
+                      { value: 'bg-blue-600 text-white', label: 'Azul' },
+                      { value: 'bg-teal-600 text-white', label: 'Turquesa' },
+                      { value: 'bg-purple-600 text-white', label: 'Morado' },
+                      { value: 'bg-indigo-600 text-white', label: 'Índigo' },
+                      { value: 'bg-orange-600 text-white', label: 'Naranja' },
+                      { value: 'bg-rose-600 text-white', label: 'Rosa' },
+                      { value: 'bg-green-600 text-white', label: 'Verde' },
+                      { value: 'bg-amber-600 text-white', label: 'Ámbar' },
+                      { value: 'bg-pink-600 text-white', label: 'Pink' },
+                      { value: 'bg-cyan-600 text-white', label: 'Cian' },
+                      { value: 'bg-lime-600 text-white', label: 'Lima' },
+                      { value: 'bg-emerald-600 text-white', label: 'Esmeralda' },
+                      { value: 'bg-red-600 text-white', label: 'Rojo' },
+                      { value: 'bg-gray-600 text-white', label: 'Gris' },
+                      { value: 'bg-violet-600 text-white', label: 'Violeta' },
+                      { value: 'bg-fuchsia-600 text-white', label: 'Fucsia' }
                     ].map(color => (
-                      <button
+                        <button
                         key={color.value}
                         type="button"
                         onClick={() => setServiceForm({...serviceForm, color: color.value})}
-                        className={`p-2 rounded-lg text-xs font-medium transition-all ${color.value} ${serviceForm.color === color.value ? 'ring-2 ring-teal-600 ring-offset-2 dark:ring-offset-gray-900' : 'opacity-60 hover:opacity-100'}`}
-                      >
+                        className={`p-2 rounded-lg text-xs font-medium transition-all ${color.value} ${serviceForm.color === color.value ? 'ring-2 ring-offset-2 ring-gray-400' : 'opacity-80 hover:opacity-100 hover:scale-105'}`}
+                        >
                         {color.label}
-                      </button>
+                        </button>
                     ))}
-                  </div>
+                    </div>
+                    
+                    <div className="mt-4 flex items-center gap-3">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Color Personalizado:</label>
+                        <div className="flex items-center gap-2">
+                           <input 
+                              type="color" 
+                              className="w-10 h-10 rounded cursor-pointer border-0 p-0"
+                              value={(serviceForm.color || '').startsWith('#') ? serviceForm.color : '#0d9488'} 
+                              onChange={(e) => setServiceForm({...serviceForm, color: e.target.value})}
+                           />
+                           {(serviceForm.color || '').startsWith('#') && (
+                               <span className="text-xs text-gray-500 font-mono">{serviceForm.color}</span>
+                           )}
+                        </div>
+                    </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                    <div><label className={labelClass}>Precio</label><input type="number" min="0" className={inputClass} value={serviceForm.defaultPrice || 0} onChange={e => setServiceForm({...serviceForm, defaultPrice: Number(e.target.value)})} /></div>

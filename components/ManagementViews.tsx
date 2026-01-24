@@ -92,9 +92,9 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, appointments, s
     if (search) {
         const lowerSearch = search.toLowerCase();
         sortableClients = sortableClients.filter(c => 
-            c.name.toLowerCase().includes(lowerSearch) ||
-            c.email.toLowerCase().includes(lowerSearch) ||
-            c.phone.toLowerCase().includes(lowerSearch)
+            (c.name || '').toLowerCase().includes(lowerSearch) ||
+            (c.email || '').toLowerCase().includes(lowerSearch) ||
+            (c.phone || '').toLowerCase().includes(lowerSearch)
         );
     }
 
@@ -1099,7 +1099,10 @@ export const ServiceList: React.FC<ServiceListProps> = ({ services, clients, app
                             {currentServices.map(service => (
                                 <tr key={service.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onClick={() => onViewService(service.id)}>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium ${service.color}`}>
+                                        <span 
+                                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium ${!service.color?.startsWith('#') ? service.color : ''}`}
+                                            style={service.color?.startsWith('#') ? { backgroundColor: service.color, color: 'white' } : {}}
+                                        >
                                             {service.name}
                                         </span>
                                     </td>
