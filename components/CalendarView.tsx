@@ -588,8 +588,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   };
 
   const renderTimeGrid = () => {
-      const nowOffset = (now.getHours() - 8) * 60 + now.getMinutes();
-      const nowTop = nowOffset >= 0 && nowOffset <= 12 * 60 ? (nowOffset / 60) * slotHeight : null;
+      const nowOffset = (now.getHours() - startHour) * 60 + now.getMinutes();
+      const nowTop = nowOffset >= 0 && nowOffset <= (endHour - startHour + 1) * 60 ? (nowOffset / 60) * slotHeight : null;
       return (
         <div className="flex flex-col h-full bg-white dark:bg-gray-800 overflow-hidden relative">
             <div className="absolute top-2 right-4 z-20 flex bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
@@ -618,6 +618,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     </div>
                     <div className={`grid w-full relative ${viewMode === 'day' ? 'grid-cols-1' : (showWeekends ? 'grid-cols-7' : 'grid-cols-5')}`}>
                         {nowTop !== null && (<div className="absolute left-0 right-0 z-30 pointer-events-none flex items-center" style={{ top: nowTop }}><div className="w-full border-t-2 border-red-500 opacity-60"></div><div className="absolute -left-1 w-2 h-2 rounded-full bg-red-500"></div></div>)}
+                        
                         {visibleDays.map(day => {
                             // HELPER: Split appointments into segments if they span across days
                             const getDailySegments = (day: Date) => {
@@ -625,21 +626,28 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                 const dayEnd = new Date(day); dayEnd.setHours(23,59,59,999);
                                 
                                 return sortedAppointments.flatMap(apt => {
-                                    const aptStart = new Date(`${apt.date.split('T')[0]}T${apt.startTime}`);
-                                    const aptEnd = new Date(aptStart.getTime() + apt.durationMinutes * 60000);
-                                    
-                                    // Check overlap
-                                    if (aptEnd <= dayStart || aptStart >= dayEnd) return [];
-                                    
-                                    // Calculate segment start/end for this day
-                                    const segStart = aptStart < dayStart ? dayStart : aptStart;
-                                    const segEnd = aptEnd > dayEnd ? dayEnd : aptEnd;
-                                    
-                                    // Calculate duration in minutes
-                                    const duration = (segEnd.getTime() - segStart.getTime()) / 60000;
-                                    
-                                    // Format start time string HH:MM
-                                    const startStr = `${segStart.getHours().toString().padStart(2, '0')}:${segStart.getMinutes().toString().padStart(2, '0')}`;
+                                // SANITIZE TIME: Remove any non-time characters (like AM/PM) for Date construction
+                                const cleanTime = apt.startTime.replace(/[^\d:]/g, ''); 
+                                const paddedStartTime = cleanTime.split(':').map(part => part.padStart(2, '0')).join(':');
+                                
+                                // FIX: Use local date formatting to handle timezone shifts correctly
+                                // (e.g., 2026-01-25T23:00:00Z should be 2026-01-26 in local time)
+                                const datePart = format(new Date(apt.date), 'yyyy-MM-dd');
+                                const aptStart = new Date(`${datePart}T${paddedStartTime}`);
+                                const aptEnd = new Date(aptStart.getTime() + apt.durationMinutes * 60000);
+                                
+                                // Check overlap
+                                if (aptEnd <= dayStart || aptStart >= dayEnd) return [];
+                                
+                                // Calculate segment start/end for this day
+                                const segStart = aptStart < dayStart ? dayStart : aptStart;
+                                const segEnd = aptEnd > dayEnd ? dayEnd : aptEnd;
+                                
+                                // Calculate duration in minutes
+                                const duration = (segEnd.getTime() - segStart.getTime()) / 60000;
+                                
+                                // Format start time string HH:MM
+                                const startStr = `${segStart.getHours().toString().padStart(2, '0')}:${segStart.getMinutes().toString().padStart(2, '0')}`;
                                     
                                     return [{
                                         ...apt,
@@ -660,18 +668,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                 
                                 // Sort appointments by start time
                                 const sorted = [...appointments].sort((a, b) => {
-                                    const aTime = parseInt(a.startTime.replace(':', ''));
-                                    const bTime = parseInt(b.startTime.replace(':', ''));
-                                    return aTime - bTime;
+                                    const getMinutes = (t: string) => parseInt(t.split(':')[0]) * 60 + parseInt(t.split(':')[1]);
+                                    return getMinutes(a.startTime) - getMinutes(b.startTime);
                                 });
                                 
                                 type AppointmentType = typeof sorted[number];
                                 
                                 // Helper to check if two appointments overlap
                                 const overlaps = (apt1: AppointmentType, apt2: AppointmentType) => {
-                                    const start1 = parseInt(apt1.startTime.replace(':', ''));
+                                    const getMinutes = (t: string) => parseInt(t.split(':')[0]) * 60 + parseInt(t.split(':')[1]);
+                                    const start1 = getMinutes(apt1.startTime);
                                     const end1 = start1 + apt1.durationMinutes;
-                                    const start2 = parseInt(apt2.startTime.replace(':', ''));
+                                    const start2 = getMinutes(apt2.startTime);
                                     const end2 = start2 + apt2.durationMinutes;
                                     return start1 < end2 && start2 < end1;
                                 };
@@ -732,8 +740,36 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                         <div key={hour} className="border-t border-gray-100 dark:border-gray-700 w-full hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" style={{ height: slotHeight }} onClick={() => handleSlotClick(day, `${hour}:00`)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, day, hour)} />
                                     ))}
                                     {dayAppointments.map(apt => {
-                                        const isResizing = resizingAptId === apt.id; const top = getTopOffset(apt.startTime); const height = isResizing && tempResizeHeight ? tempResizeHeight : (apt.durationMinutes / 60) * slotHeight; const visualTop = isResizing && tempResizeTop ? top + tempResizeTop : top; const service = getService(apt.serviceTypeId); const status = getStatus(apt.statusId); const staffMember = getStaff(apt.staffId || '');
-                                        if (top === -1) return null;
+                                        const isResizing = resizingAptId === apt.id;
+                                        // Improved overlapping logic - Final Robust Fix
+                                        const aptStartParts = apt.startTime.split(':');
+                                        const aptStartMinutes = parseInt(aptStartParts[0]) * 60 + parseInt(aptStartParts[1]);
+                                        const aptEndMinutes = aptStartMinutes + apt.durationMinutes;
+                                        const dayStartMinutes = startHour * 60;
+                                        // End of the visible grid (e.g. 23:00 -> 24:00 is the end of that slot)
+                                        const dayEndMinutes = (endHour + 1) * 60; 
+
+                                        // Skip if completely outside valid range
+                                        // Use strict inequality to avoid edge cases where start == end
+                                        if (aptEndMinutes <= dayStartMinutes || aptStartMinutes >= dayEndMinutes) return null;
+
+                                        // Calculate visual metrics with clamping
+                                        const visualStartMinutes = Math.max(aptStartMinutes, dayStartMinutes);
+                                        const visualEndMinutes = Math.min(aptEndMinutes, dayEndMinutes);
+                                        
+                                        const top = ((visualStartMinutes - dayStartMinutes) / 60) * slotHeight;
+                                        const durationHours = (visualEndMinutes - visualStartMinutes) / 60;
+                                        
+                                        // Ensure minimum height (e.g. 15 mins visually) if it's very small but visible? 
+                                        // Or just strictly proportional. 
+                                        // Let's stick to proportional but handle resize overrides.
+                                        const height = isResizing && tempResizeHeight ? tempResizeHeight : durationHours * slotHeight;
+                                        
+                                        const visualTop = isResizing && tempResizeTop ? top + tempResizeTop : top;
+                                        
+                                        const service = getService(apt.serviceTypeId); 
+                                        const status = getStatus(apt.statusId); 
+                                        const staffMember = getStaff(apt.staffId || '');
                                         
                                         // Get column layout for this appointment
                                         const colInfo = columnLayout.get(apt.id) || { column: 0, totalColumns: 1 };
@@ -743,7 +779,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                         const borderClass = status ? getStatusBorderColor(status.color) : 'border-l-transparent';
                                         
                                         return (
-                                            <div key={`${apt.id}-${day.toISOString()}`} draggable={!isResizing} onDragStart={(e) => handleDragStart(e, apt.originalApt || apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt.originalApt || apt); }} 
+                                            <div key={`${apt.id}-${day.toISOString()}`} draggable={!isResizing} onDragStart={(e) => handleDragStart(e, apt.originalApt || apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt.originalApt || apt || apt); }} 
                                                 className={`absolute rounded-md px-2 py-0.5 shadow-sm border-l-[4px] cursor-pointer z-10 overflow-hidden transition-shadow ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[0] || 'bg-gray-100') : ''} ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[1] || 'text-gray-800') : ''} ${borderClass} ${isResizing ? 'shadow-lg z-50 opacity-90 scale-[1.02]' : 'hover:shadow-md'}`} 
                                                 style={{ top: visualTop, height: Math.max(height, 24), left: `${leftPosition}%`, width: `${columnWidth - 1}%`, cursor: isResizing ? 'row-resize' : 'grab', ...(service?.color?.startsWith('#') ? { backgroundColor: service.color, color: 'white' } : {}) }}
                                             >
