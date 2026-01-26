@@ -250,7 +250,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ clients,
 
 export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, appointments, services, statuses, staff, inventory, onViewClient }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
-    const [period, setPeriod] = useState<'week' | 'month' | 'year' | 'all'>('month');
+    const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'year' | 'all'>('day');
     const [subTab, setSubTab] = useState<'general' | 'team' | 'clients' | 'inventory'>('general');
     const [teamServiceFilter, setTeamServiceFilter] = useState('');
     const [clientSearch, setClientSearch] = useState('');
@@ -262,13 +262,15 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
     const itemsPerPage = 10;
 
     const handlePrev = () => {
-        if (period === 'week') setCurrentDate(addWeeks(currentDate, -1));
+        if (period === 'day') setCurrentDate(addDays(currentDate, -1));
+        else if (period === 'week') setCurrentDate(addWeeks(currentDate, -1));
         else if (period === 'month') setCurrentDate(addMonths(currentDate, -1));
         else if (period === 'year') setCurrentDate(addYears(currentDate, -1));
     };
 
     const handleNext = () => {
-        if (period === 'week') setCurrentDate(addWeeks(currentDate, 1));
+        if (period === 'day') setCurrentDate(addDays(currentDate, 1));
+        else if (period === 'week') setCurrentDate(addWeeks(currentDate, 1));
         else if (period === 'month') setCurrentDate(addMonths(currentDate, 1));
         else if (period === 'year') setCurrentDate(addYears(currentDate, 1));
     };
@@ -276,7 +278,11 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
     const dateRange = useMemo(() => {
         if (period === 'all') return { start: null, end: null, label: 'Todo el histórico' };
         let start: Date, end: Date, label: string;
-        if (period === 'week') {
+        if (period === 'day') {
+            start = new Date(currentDate); start.setHours(0,0,0,0);
+            end = new Date(currentDate); end.setHours(23,59,59,999);
+            label = format(currentDate, 'd MMM yyyy', { locale: es });
+        } else if (period === 'week') {
             start = getStartOfWeek(currentDate, { weekStartsOn: 1 });
             end = endOfWeek(currentDate, { weekStartsOn: 1 });
             label = `${format(start, 'd MMM')} - ${format(end, 'd MMM yyyy', { locale: es })}`;
@@ -581,9 +587,9 @@ export const FinancialReport: React.FC<AnalyticsDashboardProps> = ({ clients, ap
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
                         <div className="bg-white dark:bg-gray-800 p-1 rounded-lg border border-gray-200 dark:border-gray-700 flex">
-                            {['week', 'month', 'year', 'all'].map(val => (
+                            {['day', 'week', 'month', 'year', 'all'].map(val => (
                                 <button key={val} onClick={() => { setPeriod(val as any); setTeamCurrentPage(1); setClientCurrentPage(1); setInventoryCurrentPage(1); }} className={`px-3 py-1.5 text-sm rounded-md transition-colors ${period === val ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400 font-medium' : 'text-gray-600 dark:text-gray-400 hover:text-teal-600'}`}>
-                                    {val === 'week' ? 'Semana' : val === 'month' ? 'Mes' : val === 'year' ? 'Año' : 'Todo'}
+                                    {val === 'day' ? 'Día' : val === 'week' ? 'Semana' : val === 'month' ? 'Mes' : val === 'year' ? 'Año' : 'Todo'}
                                 </button>
                             ))}
                         </div>
