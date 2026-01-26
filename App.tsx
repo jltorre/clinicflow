@@ -1289,9 +1289,43 @@ const App: React.FC = () => {
                         <div>
                             <label className={labelClass}>Estado</label>
                             <div className="flex gap-2">
-                                <select required className={inputClass} value={aptForm.statusId || ''} onChange={e => setAptForm({...aptForm, statusId: e.target.value})}>
-                                    {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                </select>
+                                {(() => {
+                                    const currentStatus = statuses.find(s => s.id === aptForm.statusId);
+                                    // Extract color name like "emerald" from "bg-emerald-100" or similar
+                                    // If it's a hex, we might need a border-l-[color] approach or inline style
+                                    // But typically statuses have classes like "bg-red-100 text-red-800"
+                                    
+                                    let extraClasses = "";
+                                    let inlineStyle = {};
+                                    
+                                    if (currentStatus) {
+                                       // Check if color is a class string or hex
+                                       if (currentStatus.color.startsWith('#')) {
+                                           inlineStyle = { borderLeftColor: currentStatus.color, borderLeftWidth: '4px' };
+                                       } else {
+                                           // Try to extract color name
+                                           const match = currentStatus.color.match(/bg-([a-z]+)-/);
+                                           if (match && match[1]) {
+                                               extraClasses = `border-l-4 border-l-${match[1]}-500`;
+                                           } else {
+                                               // Fallback for simple classes
+                                                extraClasses = `border-l-4 border-l-gray-400`;
+                                           }
+                                       }
+                                    }
+
+                                    return (
+                                        <select 
+                                            required 
+                                            className={`${inputClass} ${extraClasses} transition-all`}
+                                            style={inlineStyle}
+                                            value={aptForm.statusId || ''} 
+                                            onChange={e => setAptForm({...aptForm, statusId: e.target.value})}
+                                        >
+                                            {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                        </select>
+                                    );
+                                })()}
                                 <button 
                                     type="button"
                                     onClick={() => {

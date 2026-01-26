@@ -69,6 +69,15 @@ const getContrastColor = (bgClass: string) => {
     return 'bg-gray-500';
 };
 
+const getStatusBorderColor = (bgClass: string) => {
+    if (!bgClass) return 'border-l-gray-300';
+    const match = bgClass.match(/bg-([a-z]+)-/);
+    if (match && match[1]) {
+        return `border-l-${match[1]}-500`;
+    }
+    return 'border-l-gray-300';
+};
+
 export const CalendarView: React.FC<CalendarViewProps> = ({ 
   appointments, 
   clients, 
@@ -540,9 +549,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                       <div className="space-y-1 overflow-y-auto max-h-[80px] scrollbar-hide">
                                           {dayApts.map(apt => {
                                               const service = getService(apt.serviceTypeId); const status = getStatus(apt.statusId);
+                                              const borderClass = status ? getStatusBorderColor(status.color) : 'border-l-transparent';
                                               return (
                                                   <div key={apt.id} draggable onDragStart={(e) => handleDragStart(e, apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt); }} 
-                                                      className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer shadow-sm border-l-2 flex items-center justify-between gap-1 ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[0] || 'bg-gray-100') : ''} ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[1] || 'text-gray-800') : ''} ${status?.isBillable ? 'border-l-emerald-500' : 'border-l-transparent'}`}
+                                                      className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer shadow-sm border-l-[3px] flex items-center justify-between gap-1 ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[0] || 'bg-gray-100') : ''} ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[1] || 'text-gray-800') : ''} ${borderClass}`}
                                                       style={service?.color?.startsWith('#') ? { backgroundColor: service.color, color: 'white' } : {}}
                                                   >
                                                       <span className="truncate">{formatTime(apt.startTime)} {getClientName(apt.clientId)}</span>
@@ -689,10 +699,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                         const colInfo = columnLayout.get(apt.id) || { column: 0, totalColumns: 1 };
                                         const columnWidth = 100 / colInfo.totalColumns;
                                         const leftPosition = colInfo.column * columnWidth;
+
+                                        const borderClass = status ? getStatusBorderColor(status.color) : 'border-l-transparent';
                                         
                                         return (
                                             <div key={apt.id} draggable={!isResizing} onDragStart={(e) => handleDragStart(e, apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt); }} 
-                                                className={`absolute rounded-md px-2 py-0.5 shadow-sm border-l-[3px] cursor-pointer z-10 overflow-hidden transition-shadow ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[0] || 'bg-gray-100') : ''} ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[1] || 'text-gray-800') : ''} ${status?.isBillable ? 'ring-1 ring-emerald-400 ring-opacity-50' : ''} ${isResizing ? 'shadow-lg z-50 opacity-90 scale-[1.02]' : 'hover:shadow-md'}`} 
+                                                className={`absolute rounded-md px-2 py-0.5 shadow-sm border-l-[4px] cursor-pointer z-10 overflow-hidden transition-shadow ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[0] || 'bg-gray-100') : ''} ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[1] || 'text-gray-800') : ''} ${borderClass} ${isResizing ? 'shadow-lg z-50 opacity-90 scale-[1.02]' : 'hover:shadow-md'}`} 
                                                 style={{ top: visualTop, height: Math.max(height, 24), left: `${leftPosition}%`, width: `${columnWidth - 1}%`, cursor: isResizing ? 'row-resize' : 'grab', ...(service?.color?.startsWith('#') ? { backgroundColor: service.color, color: 'white' } : {}) }}
                                             >
                                                 <div className="absolute top-0 left-0 right-0 h-1.5 cursor-ns-resize z-20 hover:bg-black/5" onMouseDown={(e) => handleResizeStart(e, apt, 'top')} />
@@ -776,8 +788,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             <div className="space-y-2">
                                 {dayAppointments.map(apt => {
                                     const service = getService(apt.serviceTypeId); const status = getStatus(apt.statusId); const staffMember = getStaff(apt.staffId || '');
+                                    const borderClass = status ? getStatusBorderColor(status.color) : 'border-l-transparent';
                                     return (
-                                        <div key={apt.id} onClick={() => onEditAppointment(apt)} className={`rounded-xl p-3 border shadow-sm flex items-center justify-between ${service?.color.split(' ')[0] || 'bg-gray-100'} border-l-[3px] ${status?.isBillable ? 'border-l-emerald-500' : 'border-l-transparent'}`}>
+                                        <div key={apt.id} onClick={() => onEditAppointment(apt)} className={`rounded-xl p-3 border shadow-sm flex items-center justify-between ${service?.color.split(' ')[0] || 'bg-gray-100'} border-l-[4px] ${borderClass}`}>
                                            <div className="flex items-center gap-3 overflow-hidden">
                                                <div className="flex flex-col items-center min-w-[3rem] border-r border-black/10 pr-3">
                                                    <span className="font-bold text-sm">{formatTime(apt.startTime)}</span>
@@ -826,10 +839,19 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                  <span className="bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 px-2 py-0.5 rounded text-xs font-bold">
                     {visibleAppointments.length} {visibleAppointments.length === 1 ? 'cita' : 'citas'}
                  </span>
-                 <div className="hidden md:flex items-center bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-0.5 ml-4">
-                     <button onClick={handlePrev} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"><ChevronLeft className="w-4 h-4 text-gray-700 dark:text-gray-300" /></button>
-                     <span className="px-3 text-sm font-medium text-gray-700 dark:text-gray-200 min-w-[140px] text-center capitalize">{viewMode === 'day' ? format(currentDate, 'd MMMM yyyy', {locale: es}) : viewMode === 'month' ? format(currentDate, 'MMMM yyyy', {locale: es}) : `${format(startDate, 'd MMM')} - ${format(endDate, 'd MMM', {locale: es})}`}</span>
-                     <button onClick={handleNext} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"><ChevronRight className="w-4 h-4 text-gray-700 dark:text-gray-300" /></button>
+                 <div className="hidden md:flex items-center gap-2 ml-4">
+                     <button 
+                        onClick={() => setCurrentDate(new Date())}
+                        className="px-3 py-1 text-xs font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 rounded border border-teal-200 dark:border-teal-800 transition-colors uppercase tracking-wide"
+                        title="Ir a hoy"
+                     >
+                        HOY
+                     </button>
+                     <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-0.5">
+                         <button onClick={handlePrev} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"><ChevronLeft className="w-4 h-4 text-gray-700 dark:text-gray-300" /></button>
+                         <span className="px-3 text-sm font-medium text-gray-700 dark:text-gray-200 min-w-[140px] text-center capitalize">{viewMode === 'day' ? format(currentDate, 'd MMMM yyyy', {locale: es}) : viewMode === 'month' ? format(currentDate, 'MMMM yyyy', {locale: es}) : `${format(startDate, 'd MMM')} - ${format(endDate, 'd MMM', {locale: es})}`}</span>
+                         <button onClick={handleNext} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"><ChevronRight className="w-4 h-4 text-gray-700 dark:text-gray-300" /></button>
+                     </div>
                  </div>
             </div>
             <p className="md:hidden text-xs md:text-sm text-gray-600 capitalize">{format(currentDate, 'MMMM yyyy', {locale: es})}</p>
