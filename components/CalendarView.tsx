@@ -33,6 +33,8 @@ interface CalendarViewProps {
   onClearPendingContext: () => void;
   defaultView?: ViewMode;
   timeFormat?: '12h' | '24h';
+  startHour?: number;
+  endHour?: number;
 }
 
 type ViewMode = 'list' | 'day' | 'week' | 'month';
@@ -93,7 +95,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   pendingContext,
   onClearPendingContext,
   defaultView = 'week',
-  timeFormat = '24h'
+  timeFormat = '24h',
+  startHour = 8,
+  endHour = 23
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedTreatments, setSelectedTreatments] = useState<string[]>([]);
@@ -407,11 +411,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   };
   const handleSlotClick = (day: Date, time: string) => { if (skipNextClick.current) return; onAddAppointment(day, time); };
 
-  const TIME_SLOTS = Array.from({ length: 13 }, (_, i) => i + 8);
+  const TIME_SLOTS = useMemo(() => {
+      return Array.from({ length: (endHour - startHour) + 1 }, (_, i) => i + startHour);
+  }, [startHour, endHour]);
+
   const getTopOffset = (timeStr: string) => {
     const [hours, minutes] = timeStr.split(':').map(Number);
-    if (hours < 8 || hours > 20) return -1;
-    const minutesFromStart = (hours - 8) * 60 + minutes;
+    if (hours < startHour || hours > endHour) return -1;
+    const minutesFromStart = (hours - startHour) * 60 + minutes;
     return (minutesFromStart / 60) * slotHeight;
   };
 
@@ -612,7 +619,40 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     <div className={`grid w-full relative ${viewMode === 'day' ? 'grid-cols-1' : (showWeekends ? 'grid-cols-7' : 'grid-cols-5')}`}>
                         {nowTop !== null && (<div className="absolute left-0 right-0 z-30 pointer-events-none flex items-center" style={{ top: nowTop }}><div className="w-full border-t-2 border-red-500 opacity-60"></div><div className="absolute -left-1 w-2 h-2 rounded-full bg-red-500"></div></div>)}
                         {visibleDays.map(day => {
-                            const dayAppointments = getAppointmentsForDay(day);
+                            // HELPER: Split appointments into segments if they span across days
+                            const getDailySegments = (day: Date) => {
+                                const dayStart = new Date(day); dayStart.setHours(0,0,0,0);
+                                const dayEnd = new Date(day); dayEnd.setHours(23,59,59,999);
+                                
+                                return sortedAppointments.flatMap(apt => {
+                                    const aptStart = new Date(`${apt.date.split('T')[0]}T${apt.startTime}`);
+                                    const aptEnd = new Date(aptStart.getTime() + apt.durationMinutes * 60000);
+                                    
+                                    // Check overlap
+                                    if (aptEnd <= dayStart || aptStart >= dayEnd) return [];
+                                    
+                                    // Calculate segment start/end for this day
+                                    const segStart = aptStart < dayStart ? dayStart : aptStart;
+                                    const segEnd = aptEnd > dayEnd ? dayEnd : aptEnd;
+                                    
+                                    // Calculate duration in minutes
+                                    const duration = (segEnd.getTime() - segStart.getTime()) / 60000;
+                                    
+                                    // Format start time string HH:MM
+                                    const startStr = `${segStart.getHours().toString().padStart(2, '0')}:${segStart.getMinutes().toString().padStart(2, '0')}`;
+                                    
+                                    return [{
+                                        ...apt,
+                                        startTime: startStr,
+                                        durationMinutes: duration,
+                                        isContinuation: aptStart < dayStart,
+                                        isContinued: aptEnd > dayEnd,
+                                        originalApt: apt
+                                    }];
+                                });
+                            };
+
+                            const dayAppointments = getDailySegments(day);
                             
                             // Calculate column layout for overlapping appointments
                             const calculateColumnLayout = (appointments: typeof dayAppointments) => {
@@ -703,16 +743,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                         const borderClass = status ? getStatusBorderColor(status.color) : 'border-l-transparent';
                                         
                                         return (
-                                            <div key={apt.id} draggable={!isResizing} onDragStart={(e) => handleDragStart(e, apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt); }} 
+                                            <div key={`${apt.id}-${day.toISOString()}`} draggable={!isResizing} onDragStart={(e) => handleDragStart(e, apt.originalApt || apt)} onClick={(e) => { e.stopPropagation(); if (skipNextClick.current) return; onEditAppointment(apt.originalApt || apt); }} 
                                                 className={`absolute rounded-md px-2 py-0.5 shadow-sm border-l-[4px] cursor-pointer z-10 overflow-hidden transition-shadow ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[0] || 'bg-gray-100') : ''} ${!service?.color?.startsWith('#') ? (service?.color.split(' ')[1] || 'text-gray-800') : ''} ${borderClass} ${isResizing ? 'shadow-lg z-50 opacity-90 scale-[1.02]' : 'hover:shadow-md'}`} 
                                                 style={{ top: visualTop, height: Math.max(height, 24), left: `${leftPosition}%`, width: `${columnWidth - 1}%`, cursor: isResizing ? 'row-resize' : 'grab', ...(service?.color?.startsWith('#') ? { backgroundColor: service.color, color: 'white' } : {}) }}
                                             >
-                                                <div className="absolute top-0 left-0 right-0 h-1.5 cursor-ns-resize z-20 hover:bg-black/5" onMouseDown={(e) => handleResizeStart(e, apt, 'top')} />
+                                                <div className="absolute top-0 left-0 right-0 h-1.5 cursor-ns-resize z-20 hover:bg-black/5" onMouseDown={(e) => handleResizeStart(e, apt.originalApt || apt, 'top')} />
                                                 
                                                 {/* Contenido condicional según la altura */}
                                                 {height < 40 ? (
                                                     <div className="flex items-center gap-1 h-full pointer-events-none">
-                                                        <span className="font-bold text-[10px] shrink-0">{formatTime(apt.startTime)}</span>
+                                                        <span className="font-bold text-[10px] shrink-0">
+                                                            {apt.isContinuation ? `${formatTime(apt.originalApt?.startTime || apt.startTime)} (ant)` : formatTime(apt.startTime)}
+                                                        </span>
                                                         <div className="flex-1 min-w-0 flex items-center gap-1">
                                                             <span className="font-bold text-[10px] truncate leading-tight">{getClientName(apt.clientId)}</span>
                                                             {(apt.serviceItems && apt.serviceItems.length > 1) && (
@@ -730,7 +772,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                                     </div>
                                                 ) : (
                                                     <>
-                                                        <div className="flex justify-between items-start text-xs pointer-events-none transition-opacity"><span className="font-bold">{formatTime(apt.startTime)}</span>{status?.isBillable && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>}</div>
+                                                        <div className="flex justify-between items-start text-xs pointer-events-none transition-opacity">
+                                                            <span className="font-bold">
+                                                                {apt.isContinuation ? `${formatTime(apt.originalApt?.startTime || apt.startTime)} (ant)` : formatTime(apt.startTime)}
+                                                            </span>
+                                                            {status?.isBillable && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>}
+                                                        </div>
                                                         <div className="font-bold text-xs truncate leading-tight mt-0.5 pointer-events-none">{getClientName(apt.clientId)}</div>
                                                         <div className="text-[10px] opacity-80 truncate pointer-events-none flex items-center gap-1">
                                                             <span>{service?.name}</span>

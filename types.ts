@@ -129,6 +129,8 @@ export interface AppSettings {
   defaultCalendarView?: 'list' | 'day' | 'week' | 'month'; // NEW: Default view for the calendar
   theme?: 'light' | 'dark' | 'system'; // NEW: Theme setting
   timeFormat?: '12h' | '24h'; // NEW: 12h (am/pm) or 24h format
+  calendarStartHour?: number; // NEW: Start hour of the calendar (0-23)
+  calendarEndHour?: number; // NEW: End hour of the calendar (0-24)
 }
 
 // User Profile Type

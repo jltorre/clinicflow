@@ -1070,6 +1070,8 @@ const App: React.FC = () => {
                 onClearPendingContext={() => setPendingAppointmentContext(null)}
                 defaultView={settings.defaultCalendarView}
                 timeFormat={settings.timeFormat}
+                startHour={settings.calendarStartHour}
+                endHour={settings.calendarEndHour}
             />
         }
         {activeTab === 'clients' && 

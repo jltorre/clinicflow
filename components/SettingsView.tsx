@@ -159,6 +159,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     </button>
                 </div>
             </div>
+            <div className="max-w-xs">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Horario Calendario</label>
+                <div className="flex gap-2 items-center">
+                    <div className="flex-1">
+                        <label className="text-[10px] text-gray-500 uppercase font-bold">Inicio</label>
+                        <select 
+                            className="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm p-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-white"
+                            value={settings.calendarStartHour ?? 8}
+                            onChange={e => onSaveSettings({ ...settings, calendarStartHour: Number(e.target.value) })}
+                        >
+                            {Array.from({length: 24}, (_, i) => i).map(h => (
+                                <option key={h} value={h}>{h}:00</option>
+                            ))}
+                        </select>
+                    </div>
+                    <span className="text-gray-400 mt-4">-</span>
+                    <div className="flex-1">
+                        <label className="text-[10px] text-gray-500 uppercase font-bold">Fin</label>
+                        <select 
+                            className="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm p-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-white"
+                            value={settings.calendarEndHour ?? 23}
+                            onChange={e => onSaveSettings({ ...settings, calendarEndHour: Number(e.target.value) })}
+                        >
+                            {Array.from({length: 25}, (_, i) => i).map(h => (
+                                <option key={h} value={h}>{h === 24 ? '00:00 (Sig)' : `${h}:00`}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            </div>
           </div>
 
           <div className="mt-8">
